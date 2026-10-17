@@ -72,8 +72,33 @@ func SharePath(s string) error {
 	if filepath.Clean(s) != s {
 		return Errorf("share path %q is not normalized (expected %q)", s, filepath.Clean(s))
 	}
-	return SingleLine("path", s)
+	if err := SingleLine("path", s); err != nil {
+		return err
+	}
+	return notSystemDir(s)
 }
+
+// systemDirs must not be shared (or contain a share): they hold system
+// configuration, secrets or the panel's own data.
+var systemDirs = []string{"/etc", "/root", "/proc", "/sys", "/dev", "/boot", "/run", "/usr", "/bin", "/sbin",
+	"/lib", "/lib32", "/lib64", "/libx32", "/var/run", "/var/lib/samba", "/var/lib/casaos-native-panel", "/var/lib/casaos"}
+
+// notSystemDir rejects "/" , "/var" and anything inside systemDirs. Call it again
+// with the symlink-resolved path before using a directory.
+func notSystemDir(p string) error {
+	if p == "/" || p == "/var" {
+		return Errorf("sharing %s would expose the whole system", p)
+	}
+	for _, d := range systemDirs {
+		if p == d || strings.HasPrefix(p, d+"/") {
+			return Errorf("share path %q is inside the system directory %s", p, d)
+		}
+	}
+	return nil
+}
+
+// ResolvedSharePath checks the real location of a share directory after symlinks.
+func ResolvedSharePath(resolved string) error { return notSystemDir(resolved) }
 
 // SingleLine rejects values that could inject extra lines into a config file.
 func SingleLine(field, s string) error {

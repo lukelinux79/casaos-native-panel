@@ -100,3 +100,35 @@ func TestRemoveShare(t *testing.T) {
 		t.Fatal("removing unknown share reported success")
 	}
 }
+
+func TestEnsureCasaOSCompat(t *testing.T) {
+	c := Parse(sample)
+	c.EnsureCasaOSCompat()
+	out := c.String()
+	if !strings.HasPrefix(out, CasaOSHeader+"\n") {
+		t.Fatalf("header missing:\n%s", out)
+	}
+	if !strings.Contains(out, "include = "+CasaOSInclude) || !strings.Contains(out, "create mask = 0664") {
+		t.Fatalf("include missing or content lost:\n%s", out)
+	}
+	// Idempotent: a second call changes nothing.
+	c2 := Parse(out)
+	c2.EnsureCasaOSCompat()
+	if c2.String() != out {
+		t.Fatalf("second call changed config:\n%s", c2.String())
+	}
+	// A file written by CasaOS itself keeps its own include line.
+	casa := CasaOSHeader + "\n[global]\n   map to guest = bad user\n   include=/etc/samba/smb.casa.conf\n"
+	c3 := Parse(casa)
+	c3.EnsureCasaOSCompat()
+	if c3.String() != casa {
+		t.Fatalf("CasaOS file was modified:\n%s", c3.String())
+	}
+}
+
+func TestForceUser(t *testing.T) {
+	sh := Parse("[Media]\npath = /DATA/Media\nguest ok = Yes\nforce user = root\n").Section("Media").share()
+	if sh.ForceUser != "root" || !sh.GuestOK {
+		t.Fatalf("got %+v", sh)
+	}
+}

@@ -125,9 +125,17 @@ func (l *Limiter) Blocked(key string) bool {
 	return len(l.recentLocked(key)) >= l.max
 }
 
+// maxTrackedClients bounds memory when failures come from very many addresses.
+const maxTrackedClients = 10000
+
 func (l *Limiter) Fail(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if len(l.failures) >= maxTrackedClients {
+		for k := range l.failures {
+			l.recentLocked(k) // drops keys without recent failures
+		}
+	}
 	l.failures[key] = append(l.recentLocked(key), l.now())
 }
 

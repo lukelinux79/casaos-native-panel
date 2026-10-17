@@ -62,6 +62,12 @@ type Share struct {
 	WriteList  []string `json:"write_list,omitempty"`
 	// Special marks built-in sections like [homes] or [printers].
 	Special bool `json:"special,omitempty"`
+	// ForceUser is Samba's "force user"; all access then runs as this user.
+	ForceUser string `json:"force_user,omitempty"`
+	// ManagedBy is "casaos" for shares CasaOS writes to smb.casa.conf.
+	ManagedBy string `json:"managed_by,omitempty"`
+	// Warnings lists security problems of the share, e.g. guest write access.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type Metrics struct {

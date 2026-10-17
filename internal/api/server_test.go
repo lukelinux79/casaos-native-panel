@@ -306,3 +306,62 @@ func TestOperatorCannotEscalate(t *testing.T) {
 		t.Errorf("admin add to sudo: %d", rec.Code)
 	}
 }
+
+// casaRuntime pretends CasaOS runs on the host.
+type casaRuntime struct{ fakeRuntime }
+
+func (c *casaRuntime) CasaOSAvailable() bool { return true }
+func (c *casaRuntime) GetUsers() ([]runtime.User, error) {
+	return []runtime.User{
+		{Username: "shelly", UID: 1002, Shell: "/bin/bash"},
+		{Username: "nas", UID: 1003, Shell: "/usr/sbin/nologin"},
+	}, nil
+}
+
+func TestLoginShellsAdminOnlyWithCasaOS(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := accounts.Open(filepath.Join(dir, "accounts.json"))
+	_ = store.Create("op", "password123", accounts.RoleOperator)
+	_ = store.Create("boss", "password123", accounts.RoleAdmin)
+	e := &testEnv{h: NewServer(Options{Runtime: &casaRuntime{}, Accounts: store, WebDir: "does-not-exist"}).Handler()}
+	op, boss := e.login(t, "op"), e.login(t, "boss")
+
+	cases := []struct {
+		name   string
+		r      req
+		status int
+	}{
+		{"operator creates bash user", req{method: "POST", path: "/api/v1/users", body: `{"username":"x","password":"pw123456","shell":"/bin/bash"}`, cookie: op}, http.StatusForbidden},
+		{"operator creates user with default shell", req{method: "POST", path: "/api/v1/users", body: `{"username":"x","password":"pw123456"}`, cookie: op}, http.StatusForbidden},
+		{"operator creates nologin user", req{method: "POST", path: "/api/v1/users", body: `{"username":"x","password":"pw123456","shell":"/usr/sbin/nologin"}`, cookie: op}, http.StatusCreated},
+		{"operator resets shell user password", req{method: "PUT", path: "/api/v1/users/shelly/password", body: `{"password":"pw123456"}`, cookie: op}, http.StatusForbidden},
+		{"operator resets nologin user password", req{method: "PUT", path: "/api/v1/users/nas/password", body: `{"password":"pw123456"}`, cookie: op}, http.StatusOK},
+		{"admin creates bash user", req{method: "POST", path: "/api/v1/users", body: `{"username":"y","password":"pw123456","shell":"/bin/bash"}`, cookie: boss}, http.StatusCreated},
+	}
+	for _, c := range cases {
+		if rec := e.do(c.r); rec.Code != c.status {
+			t.Errorf("%s: got %d, want %d (%s)", c.name, rec.Code, c.status, rec.Body)
+		}
+	}
+}
+
+type shareRuntime struct{ fakeRuntime }
+
+func (s *shareRuntime) GetShares() ([]runtime.Share, error) {
+	return []runtime.Share{{Name: "Fotos", ValidUsers: []string{"@family"}}, {Name: "Misc", ValidUsers: []string{"family"}}}, nil
+}
+func (s *shareRuntime) DeleteGroup(string) error { return nil }
+
+func TestDeleteGroupUsedByShare(t *testing.T) {
+	store, _ := accounts.Open(filepath.Join(t.TempDir(), "accounts.json"))
+	_ = store.Create("op", "password123", accounts.RoleOperator)
+	e := &testEnv{h: NewServer(Options{Runtime: &shareRuntime{}, Accounts: store, WebDir: "does-not-exist"}).Handler()}
+	c := e.login(t, "op")
+	rec := e.do(req{method: "DELETE", path: "/api/v1/groups/family", cookie: c})
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Fotos") || strings.Contains(rec.Body.String(), "Misc") {
+		t.Fatalf("got %d %s", rec.Code, rec.Body)
+	}
+	if rec := e.do(req{method: "DELETE", path: "/api/v1/groups/family?force=true", cookie: c}); rec.Code != http.StatusOK {
+		t.Fatalf("force delete: %d", rec.Code)
+	}
+}

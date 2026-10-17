@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lukelinux79/casaos-native-panel/internal/casaos"
 	sys "github.com/lukelinux79/casaos-native-panel/internal/system"
 	"github.com/lukelinux79/casaos-native-panel/internal/validate"
 )
@@ -18,10 +19,12 @@ import (
 type SystemRuntime struct {
 	// sambaMu serializes read-modify-write cycles on smb.conf.
 	sambaMu sync.Mutex
+	// casa is nil when the CasaOS integration is switched off.
+	casa *casaos.Client
 }
 
-func NewSystemRuntime() Runtime {
-	return &SystemRuntime{}
+func NewSystemRuntime(casa *casaos.Client) Runtime {
+	return &SystemRuntime{casa: casa}
 }
 
 func (s *SystemRuntime) Name() string { return "system" }
@@ -145,9 +148,15 @@ func (s *SystemRuntime) StartService(name string) error   { return s.serviceActi
 func (s *SystemRuntime) StopService(name string) error    { return s.serviceAction("stop", name) }
 func (s *SystemRuntime) RestartService(name string) error { return s.serviceAction("restart", name) }
 
+// protectedServices would lock everyone out of the panel if stopped from it.
+var protectedServices = map[string]bool{"casaos-native-panel": true, "casaos-gateway": true}
+
 func (s *SystemRuntime) serviceAction(action, name string) error {
 	if err := validate.ServiceName(name); err != nil {
 		return err
+	}
+	if action == "stop" && protectedServices[strings.TrimSuffix(name, ".service")] {
+		return validate.Errorf("stopping %s from the panel would make the panel unreachable", name)
 	}
 	return run("", "systemctl", action, "--", name)
 }

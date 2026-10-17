@@ -28,7 +28,24 @@ func denyUnlessAdmin(w http.ResponseWriter, r *http.Request, groups ...string) b
 	return false
 }
 
-// denyPrivilegedUser blocks non-admins from changing a Linux user that is in a privileged group.
+// noLoginShells cannot start an interactive session.
+var noLoginShells = map[string]bool{"/usr/sbin/nologin": true, "/sbin/nologin": true, "/bin/false": true, "/usr/bin/false": true}
+
+// casaOSShellRisk explains why login shells are admin-only next to CasaOS,
+// which runs as root and exposes local services to every local account.
+const casaOSShellRisk = "on CasaOS hosts accounts with a login shell are a security risk"
+
+// denyLoginShell blocks non-admins from creating accounts with a login shell when CasaOS runs.
+func (s *Server) denyLoginShell(w http.ResponseWriter, r *http.Request, shell string) bool {
+	if currentUser(r).Role.Allows(accounts.RoleAdmin) || noLoginShells[shell] || !s.runtime.CasaOSAvailable() {
+		return false
+	}
+	writeJSON(w, http.StatusForbidden, response{"error": "only admins may create users with a login shell: " + casaOSShellRisk + ". Use /usr/sbin/nologin for Samba-only users."})
+	return true
+}
+
+// denyPrivilegedUser blocks non-admins from changing a Linux user that is in a
+// privileged group, or that has a login shell while CasaOS runs.
 func (s *Server) denyPrivilegedUser(w http.ResponseWriter, r *http.Request, username string) bool {
 	if currentUser(r).Role.Allows(accounts.RoleAdmin) {
 		return false
@@ -47,6 +64,10 @@ func (s *Server) denyPrivilegedUser(w http.ResponseWriter, r *http.Request, user
 				writeJSON(w, http.StatusForbidden, response{"error": "user " + username + " is in the privileged group " + g + "; only admins may change this user"})
 				return true
 			}
+		}
+		if !noLoginShells[u.Shell] && s.runtime.CasaOSAvailable() {
+			writeJSON(w, http.StatusForbidden, response{"error": "user " + username + " has a login shell; only admins may change it: " + casaOSShellRisk})
+			return true
 		}
 	}
 	return false

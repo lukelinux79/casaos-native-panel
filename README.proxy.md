@@ -15,6 +15,15 @@ This will:
 
 Ensure DNS for your domain points to the server's public IP before running.
 
+### With CasaOS
+
+The CasaOS gateway already uses port 80, so move it first (CasaOS: *Settings → WebUI port*, e.g. `8088`), then forward Nginx to the gateway instead of the panel:
+
+    sudo UPSTREAM=http://127.0.0.1:8088 bash scripts/reverse-proxy-setup.sh your.domain.tld
+
+CasaOS and the panel (`https://your.domain.tld/panel/`) are then both served over HTTPS.
+The generated config sends `X-Forwarded-For`; keep it, CasaOS needs it to identify clients.
+
 ## Admin credentials
 
 The first admin account is created from environment variables on first start, e.g. in `/etc/casaos-native-panel.env`:

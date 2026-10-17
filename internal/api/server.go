@@ -13,6 +13,7 @@ import (
 	"github.com/lukelinux79/casaos-native-panel/internal/accounts"
 	"github.com/lukelinux79/casaos-native-panel/internal/audit"
 	"github.com/lukelinux79/casaos-native-panel/internal/auth"
+	"github.com/lukelinux79/casaos-native-panel/internal/casaos"
 	"github.com/lukelinux79/casaos-native-panel/internal/runtime"
 	"github.com/lukelinux79/casaos-native-panel/internal/system"
 	"github.com/lukelinux79/casaos-native-panel/internal/validate"
@@ -28,6 +29,8 @@ type Server struct {
 	audit        *audit.Logger
 	authDisabled bool
 	webDir       string
+	casa         *casaos.Client
+	basePath     string
 }
 
 // Options configures a Server. Accounts is required; Audit may be nil.
@@ -37,6 +40,11 @@ type Options struct {
 	Audit        *audit.Logger
 	AuthDisabled bool
 	WebDir       string
+	// CasaOS enables "sign in with CasaOS"; nil switches it off.
+	CasaOS *casaos.Client
+	// BasePath (e.g. /panel) is the prefix used by the CasaOS gateway. The
+	// panel answers both with and without it.
+	BasePath string
 }
 
 type response map[string]any
@@ -53,6 +61,8 @@ func NewServer(o Options) *Server {
 		audit:        o.Audit,
 		authDisabled: o.AuthDisabled,
 		webDir:       o.WebDir,
+		casa:         o.CasaOS,
+		basePath:     strings.TrimRight(o.BasePath, "/"),
 	}
 }
 
@@ -68,6 +78,7 @@ func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 	api.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+	api.HandleFunc("POST /api/v1/auth/casaos", s.handleCasaOSLogin)
 
 	route := func(pattern string, min accounts.Role, action string, h http.HandlerFunc) {
 		api.Handle(pattern, s.protect(min, action, h))
@@ -103,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET /api/v1/samba/shares", viewer, "", s.handleListShares)
 	route("PUT /api/v1/samba/shares/{name}", operator, "share.save", s.handleSaveShare)
 	route("DELETE /api/v1/samba/shares/{name}", operator, "share.delete", s.handleDeleteShare)
+	route("POST /api/v1/samba/shares/{name}/adopt", operator, "share.adopt_casaos", s.handleAdoptShare)
 	route("GET /api/v1/samba/users", viewer, "", s.handleListSambaUsers)
 	route("PUT /api/v1/samba/users/{name}", operator, "samba.set_password", s.handleSetSambaPassword)
 	route("DELETE /api/v1/samba/users/{name}", operator, "samba.delete_user", s.handleDeleteSambaUser)
@@ -121,7 +133,31 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/", s.handleRoot)
 	}
 
-	return mux
+	return s.withBasePath(mux)
+}
+
+// withBasePath serves the panel under s.basePath as well as at the root, so it
+// works both directly and behind the CasaOS gateway, which keeps the prefix.
+func (s *Server) withBasePath(next http.Handler) http.Handler {
+	if s.basePath == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == s.basePath:
+			http.Redirect(w, r, s.basePath+"/", http.StatusMovedPermanently)
+			return
+		case strings.HasPrefix(r.URL.Path, s.basePath+"/"):
+			r2 := new(http.Request)
+			*r2 = *r
+			u := *r.URL
+			u.Path = strings.TrimPrefix(r.URL.Path, s.basePath)
+			u.RawPath = ""
+			r2.URL = &u
+			r = r2
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func securityHeaders(next http.Handler) http.Handler {
@@ -130,6 +166,10 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
+		// No inline scripts: the UI script lives in web/app.js. This limits the
+		// damage of an injection bug, which matters because behind the CasaOS
+		// gateway the panel shares its origin with the CasaOS UI.
+		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -332,7 +372,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &u) {
 		return
 	}
-	if denyUnlessAdmin(w, r, u.Groups...) {
+	if denyUnlessAdmin(w, r, u.Groups...) || s.denyLoginShell(w, r, u.Shell) {
 		return
 	}
 	if err := s.runtime.CreateUser(u); err != nil {
@@ -397,11 +437,39 @@ func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
-	if err := s.runtime.DeleteGroup(r.PathValue("name")); err != nil {
+	name := r.PathValue("name")
+	if r.URL.Query().Get("force") != "true" {
+		if used := sharesUsingGroup(s.runtime, name); len(used) > 0 {
+			writeJSON(w, http.StatusConflict, response{
+				"error":  "group " + name + " is used by the shares " + strings.Join(used, ", ") + "; nobody in it can access them after deleting it",
+				"shares": used,
+			})
+			return
+		}
+	}
+	if err := s.runtime.DeleteGroup(name); err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, response{"status": "deleted"})
+}
+
+// sharesUsingGroup lists shares whose valid users or write list contain @group.
+func sharesUsingGroup(rt runtime.Runtime, group string) []string {
+	shares, err := rt.GetShares()
+	if err != nil {
+		return nil
+	}
+	var used []string
+	for _, sh := range shares {
+		for _, p := range append(append([]string{}, sh.ValidUsers...), sh.WriteList...) {
+			if strings.TrimLeft(p, "@+&") == group && p != group {
+				used = append(used, sh.Name)
+				break
+			}
+		}
+	}
+	return used
 }
 
 func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
@@ -473,6 +541,15 @@ func (s *Server) handleSaveShare(w http.ResponseWriter, r *http.Request) {
 	sh.Name = r.PathValue("name")
 	err := s.runtime.SaveShare(sh)
 	writeSambaResult(w, err, http.StatusOK, response{"status": "saved", "share": sh})
+}
+
+func (s *Server) handleAdoptShare(w http.ResponseWriter, r *http.Request) {
+	var sh runtime.Share
+	if !decode(w, r, &sh) {
+		return
+	}
+	err := s.runtime.AdoptShare(r.PathValue("name"), sh)
+	writeSambaResult(w, err, http.StatusOK, response{"status": "secured"})
 }
 
 func (s *Server) handleDeleteShare(w http.ResponseWriter, r *http.Request) {

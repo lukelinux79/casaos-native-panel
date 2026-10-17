@@ -61,3 +61,16 @@ func TestPrincipal(t *testing.T) {
 		}
 	}
 }
+
+func TestSharePathSystemDirs(t *testing.T) {
+	for _, bad := range []string{"/", "/var", "/etc", "/etc/samba", "/root", "/proc/1", "/var/lib/casaos-native-panel", "/usr/share"} {
+		if SharePath(bad) == nil {
+			t.Errorf("SharePath(%q) accepted", bad)
+		}
+	}
+	for _, ok := range []string{"/srv/media", "/DATA/Media", "/home/anna", "/var/data", "/mnt/disk1", "/etcetera"} {
+		if err := SharePath(ok); err != nil {
+			t.Errorf("SharePath(%q) = %v", ok, err)
+		}
+	}
+}

@@ -47,6 +47,8 @@ func (d *DockerRuntime) RemoveGroupMember(string, string) error { return ErrUnsu
 func (d *DockerRuntime) GetShares() ([]Share, error)            { return nil, nil }
 func (d *DockerRuntime) SaveShare(Share) error                  { return ErrUnsupported }
 func (d *DockerRuntime) DeleteShare(string) error               { return ErrUnsupported }
+func (d *DockerRuntime) AdoptShare(string, Share) error         { return ErrUnsupported }
+func (d *DockerRuntime) CasaOSAvailable() bool                  { return false }
 func (d *DockerRuntime) GetSambaUsers() ([]string, error)       { return nil, nil }
 func (d *DockerRuntime) SetSambaPassword(string, string) error  { return ErrUnsupported }
 func (d *DockerRuntime) DeleteSambaUser(string) error           { return ErrUnsupported }

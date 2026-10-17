@@ -108,6 +108,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.limiter.Reset(ip)
+	s.startSession(w, r, info, "auth.login")
+}
+
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, info accounts.Info, action string) {
 	id, err := s.sessions.Create(info.Username)
 	if err != nil {
 		writeError(w, err)
@@ -122,8 +126,43 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Secure:   isHTTPS(r),
 		SameSite: http.SameSiteStrictMode,
 	})
-	s.logAudit(r, info.Username, "auth.login", "", http.StatusOK)
+	s.logAudit(r, info.Username, action, "", http.StatusOK)
 	writeJSON(w, http.StatusOK, response{"username": info.Username, "role": info.Role})
+}
+
+// handleCasaOSLogin signs in with a CasaOS access token. The panel account
+// with the same username must already exist; its role applies.
+func (s *Server) handleCasaOSLogin(w http.ResponseWriter, r *http.Request) {
+	if s.casa == nil {
+		writeJSON(w, http.StatusNotFound, response{"error": "CasaOS integration is off"})
+		return
+	}
+	var p struct {
+		Token string `json:"token"`
+	}
+	if !decode(w, r, &p) {
+		return
+	}
+	ip := clientIP(r)
+	if s.limiter.Blocked(ip) {
+		writeJSON(w, http.StatusTooManyRequests, response{"error": "too many failed logins, try again in 15 minutes"})
+		return
+	}
+	name, err := s.casa.VerifyToken(p.Token)
+	if err != nil {
+		s.limiter.Fail(ip)
+		s.logAudit(r, "", "auth.casaos_failed", "", http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, response{"error": "CasaOS sign-in failed: " + err.Error()})
+		return
+	}
+	info, ok := s.accounts.Get(name)
+	if !ok {
+		s.logAudit(r, name, "auth.casaos_no_account", "", http.StatusForbidden)
+		writeJSON(w, http.StatusForbidden, response{"error": "no panel account named " + name + "; an admin has to create it first"})
+		return
+	}
+	s.limiter.Reset(ip)
+	s.startSession(w, r, info, "auth.casaos_login")
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +175,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	p := currentUser(r)
-	writeJSON(w, http.StatusOK, response{"username": p.Username, "role": p.Role, "auth_disabled": s.authDisabled})
+	writeJSON(w, http.StatusOK, response{"username": p.Username, "role": p.Role, "auth_disabled": s.authDisabled, "casaos": s.runtime.CasaOSAvailable()})
 }
 
 func (s *Server) handleChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
@@ -270,18 +309,35 @@ func auditTarget(r *http.Request) string {
 	return strings.Join(parts, " ")
 }
 
-// clientIP trusts X-Real-IP only from a local reverse proxy (see scripts/reverse-proxy-setup.sh).
+// clientIP trusts forwarding headers only from local reverse proxies. Nginx
+// (scripts/reverse-proxy-setup.sh) sets X-Real-IP; the CasaOS gateway removes
+// it and appends its own loopback address to X-Forwarded-For. Walking that
+// list from the right and skipping loopback hops yields the first address a
+// local proxy received the request from, which a remote client cannot forge.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		if real := strings.TrimSpace(r.Header.Get("X-Real-IP")); real != "" {
-			return real
+	if !isLoopback(host) {
+		return host
+	}
+	if real := strings.TrimSpace(r.Header.Get("X-Real-IP")); real != "" {
+		return real
+	}
+	hops := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(hops) - 1; i >= 0; i-- {
+		hop := strings.TrimSpace(hops[i])
+		if hop != "" && !isLoopback(hop) {
+			return hop
 		}
 	}
 	return host
+}
+
+func isLoopback(addr string) bool {
+	ip := net.ParseIP(addr)
+	return ip != nil && ip.IsLoopback()
 }
 
 func isHTTPS(r *http.Request) bool {

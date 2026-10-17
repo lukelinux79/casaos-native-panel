@@ -121,6 +121,39 @@ func (c *Config) SetShare(sh model.Share) {
 	}
 }
 
+// CasaOSHeader is the first line CasaOS checks in smb.conf. Without it,
+// CasaOS replaces smb.conf with its own template on the next share change
+// (moving the old file to smb.conf.bak), which would drop the panel's shares.
+const CasaOSHeader = "# Copyright (c) 2021-2022 CasaOS Inc. All rights reserved."
+
+// CasaOSInclude is where CasaOS writes the shares it manages.
+const CasaOSInclude = "/etc/samba/smb.casa.conf"
+
+// EnsureCasaOSCompat keeps smb.conf in the form CasaOS expects: its header
+// line first and [global] including smb.casa.conf. Everything else is kept.
+func (c *Config) EnsureCasaOSCompat() {
+	first := ""
+	if len(c.Preamble) > 0 {
+		first = c.Preamble[0]
+	} else if len(c.Sections) > 0 {
+		first = c.Sections[0].Header
+	}
+	if strings.TrimSpace(first) != CasaOSHeader {
+		c.Preamble = append([]string{CasaOSHeader, "# Managed together with CasaOS Native Panel; CasaOS shares are in " + CasaOSInclude}, c.Preamble...)
+	}
+	global := c.Section("global")
+	if global == nil {
+		global = &Section{Name: "global", Header: "[global]"}
+		c.Sections = append([]*Section{global}, c.Sections...)
+	}
+	for _, p := range global.params() {
+		if p.key == "include" && strings.TrimSpace(p.value) == CasaOSInclude {
+			return
+		}
+	}
+	global.insert("   include = " + CasaOSInclude)
+}
+
 // RemoveShare deletes the section and reports whether it existed.
 func (c *Config) RemoveShare(name string) bool {
 	for i, s := range c.Sections {
@@ -157,6 +190,8 @@ func (s *Section) share() model.Share {
 			sh.ValidUsers = splitList(p.value)
 		case "writelist":
 			sh.WriteList = splitList(p.value)
+		case "forceuser":
+			sh.ForceUser = p.value
 		}
 	}
 	return sh

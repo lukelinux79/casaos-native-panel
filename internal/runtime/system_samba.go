@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/lukelinux79/casaos-native-panel/internal/samba"
@@ -32,20 +33,75 @@ func (s *SystemRuntime) SaveSambaConfig(content string) error {
 	return sys.SaveSambaConfig(content)
 }
 
+func (s *SystemRuntime) CasaOSAvailable() bool {
+	return s.casa != nil && s.casa.Available()
+}
+
+// withCasaOS reports whether smb.conf must stay compatible with CasaOS.
+func (s *SystemRuntime) withCasaOS() bool {
+	if _, err := os.Stat(samba.CasaOSInclude); err == nil {
+		return true
+	}
+	return s.CasaOSAvailable()
+}
+
+// casaOSShares returns the shares CasaOS wrote to smb.casa.conf, keyed by lowercase name.
+func casaOSShares() map[string]Share {
+	out := map[string]Share{}
+	content, err := os.ReadFile(samba.CasaOSInclude)
+	if err != nil {
+		return out
+	}
+	for _, sh := range samba.Parse(string(content)).Shares() {
+		sh.ManagedBy = "casaos"
+		out[strings.ToLower(sh.Name)] = sh
+	}
+	return out
+}
+
+func shareWarnings(sh Share) []string {
+	var w []string
+	switch {
+	case sh.GuestOK && !sh.ReadOnly:
+		w = append(w, "anyone on the network can read and write without a password")
+	case sh.GuestOK:
+		w = append(w, "anyone on the network can read without a password")
+	}
+	if sh.ForceUser == "root" {
+		w = append(w, "all file access runs as root")
+	}
+	return w
+}
+
 func (s *SystemRuntime) GetShares() ([]Share, error) {
 	content, err := s.GetSambaConfig()
 	if err != nil {
 		return nil, err
 	}
-	return samba.Parse(content).Shares(), nil
+	shares := samba.Parse(content).Shares()
+	for _, sh := range casaOSShares() {
+		shares = append(shares, sh)
+	}
+	for i := range shares {
+		shares[i].Warnings = shareWarnings(shares[i])
+	}
+	return shares, nil
 }
 
 func (s *SystemRuntime) SaveShare(sh Share) error {
 	if err := validateShare(sh); err != nil {
 		return err
 	}
+	if _, managed := casaOSShares()[strings.ToLower(sh.Name)]; managed {
+		return validate.Errorf("share name %q is used by a CasaOS share; secure that share instead or choose another name", sh.Name)
+	}
 	if info, err := os.Stat(sh.Path); err != nil || !info.IsDir() {
 		return validate.Errorf("share path %q does not exist or is not a directory", sh.Path)
+	}
+	if real, err := filepath.EvalSymlinks(sh.Path); err != nil {
+		return err
+	} else if err := validate.ResolvedSharePath(real); err != nil {
+		return err
 	}
 	return s.editSambaConfig(func(c *samba.Config) error {
 		c.SetShare(sh)
@@ -56,6 +112,9 @@ func (s *SystemRuntime) SaveShare(sh Share) error {
 func (s *SystemRuntime) DeleteShare(name string) error {
 	if err := validate.ShareName(name); err != nil {
 		return err
+	}
+	if _, managed := casaOSShares()[strings.ToLower(name)]; managed {
+		return validate.Errorf("share %q is managed by CasaOS; remove it in CasaOS or secure it here", name)
 	}
 	return s.editSambaConfig(func(c *samba.Config) error {
 		if !c.RemoveShare(name) {
@@ -77,7 +136,58 @@ func (s *SystemRuntime) editSambaConfig(edit func(*samba.Config) error) error {
 	if err := edit(c); err != nil {
 		return err
 	}
+	if s.withCasaOS() {
+		// Keep CasaOS from replacing smb.conf, and keep its shares included.
+		c.EnsureCasaOSCompat()
+		if _, err := os.Stat(samba.CasaOSInclude); errors.Is(err, os.ErrNotExist) {
+			if err := os.WriteFile(samba.CasaOSInclude, nil, 0o644); err != nil {
+				return err
+			}
+		}
+	}
 	return sys.SaveSambaConfig(c.String())
+}
+
+// AdoptShare takes a share away from CasaOS and recreates it under the same
+// name and path with the given access rules. If that fails, the CasaOS share
+// is restored.
+func (s *SystemRuntime) AdoptShare(name string, sh Share) error {
+	if !s.CasaOSAvailable() {
+		return fmt.Errorf("CasaOS is not running: %w", ErrUnsupported)
+	}
+	old, ok := casaOSShares()[strings.ToLower(name)]
+	if !ok {
+		return fmt.Errorf("CasaOS share %q: %w", name, ErrNotFound)
+	}
+	sh.Name, sh.Path = old.Name, old.Path
+	if err := validateShare(sh); err != nil {
+		return err
+	}
+	list, err := s.casa.Shares()
+	if err != nil {
+		return err
+	}
+	id, anonymous := -1, false
+	for _, c := range list {
+		if c.Path == old.Path {
+			id, anonymous = c.ID, c.Anonymous
+		}
+	}
+	if id < 0 {
+		return fmt.Errorf("CasaOS share for %s: %w", old.Path, ErrNotFound)
+	}
+	if err := s.casa.DeleteShare(id); err != nil {
+		return err
+	}
+	err = s.SaveShare(sh)
+	var reload *sys.ReloadError
+	if err == nil || errors.As(err, &reload) {
+		return err
+	}
+	if rerr := s.casa.CreateShare(old.Path, anonymous); rerr != nil {
+		return fmt.Errorf("%v (restoring the CasaOS share also failed: %v)", err, rerr)
+	}
+	return fmt.Errorf("%w (the CasaOS share was restored)", err)
 }
 
 func (s *SystemRuntime) GetSambaUsers() ([]string, error) {

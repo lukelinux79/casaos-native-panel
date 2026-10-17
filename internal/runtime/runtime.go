@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lukelinux79/casaos-native-panel/internal/casaos"
 	model "github.com/lukelinux79/casaos-native-panel/internal/model"
 )
 
@@ -68,15 +69,19 @@ type Runtime interface {
 	GetShares() ([]Share, error)
 	SaveShare(s Share) error
 	DeleteShare(name string) error
+	// AdoptShare replaces a CasaOS-managed share with a protected one.
+	AdoptShare(name string, s Share) error
+	CasaOSAvailable() bool
 	GetSambaUsers() ([]string, error)
 	SetSambaPassword(name, password string) error
 	DeleteSambaUser(name string) error
 }
 
-func New(mode string) (Runtime, error) {
+// New creates the runtime for mode. casa may be nil to disable the CasaOS integration.
+func New(mode string, casa *casaos.Client) (Runtime, error) {
 	switch mode {
 	case "system":
-		return NewSystemRuntime(), nil
+		return NewSystemRuntime(casa), nil
 	case "docker":
 		return NewDockerRuntime(), nil
 	default:
