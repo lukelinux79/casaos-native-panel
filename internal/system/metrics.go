@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 package system
 
@@ -10,25 +9,13 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	model "github.com/lukelinux79/casaos-native-panel/internal/model"
 )
 
-// Metrics represents native system metrics used by the dashboard.
-type Metrics struct {
-	Load1          float64 `json:"load1"`
-	Load5          float64 `json:"load5"`
-	Load15         float64 `json:"load15"`
-	MemTotalKB     int64   `json:"mem_total_kb"`
-	MemAvailableKB int64   `json:"mem_available_kb"`
-	DiskTotalBytes uint64  `json:"disk_total_bytes"`
-	DiskFreeBytes  uint64  `json:"disk_free_bytes"`
-	DiskUsedPct    float64 `json:"disk_used_percent"`
-	NetRxBytes     uint64  `json:"net_rx_bytes"`
-	NetTxBytes     uint64  `json:"net_tx_bytes"`
-	UptimeSeconds  float64 `json:"uptime_seconds"`
-}
-
-func GetMetrics() (Metrics, error) {
-	var out Metrics
+// GetMetrics reads native metrics from /proc and statfs. Missing sources are left at zero.
+func GetMetrics() (model.Metrics, error) {
+	var out model.Metrics
 
 	load1, load5, load15, err := readLoadAvg()
 	if err == nil {

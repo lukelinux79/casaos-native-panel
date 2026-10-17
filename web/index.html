@@ -1,125 +1,322 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CasaOS Native Panel</title>
     <style>
-... (omitted for brevity, same CSS as before) ...
+      :root {
+        --bg: #0b1020; --panel: #111827; --border: #374151; --text: #e5e7eb;
+        --muted: #9ca3af; --accent: #3b82f6; --danger: #ef4444; --ok: #22c55e;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+      .layout { display: flex; min-height: 100vh; }
+      .sidebar { width: 210px; background: var(--panel); border-right: 1px solid var(--border); padding: 20px 14px; flex-shrink: 0; }
+      .brand { font-weight: 700; font-size: 18px; margin-bottom: 22px; }
+      .nav a { display: block; padding: 9px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; margin-bottom: 4px; }
+      .nav a.active, .nav a:hover { background: #1f2937; color: var(--text); }
+      .content { flex: 1; padding: 24px 28px; min-width: 0; }
+      .header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+      h1 { margin: 0; font-size: 24px; }
+      h2 { margin: 0 0 12px; font-size: 16px; }
+      .badge { background: #1f2937; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; }
+      .grid .card { margin-bottom: 0; }
+      .label { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+      .value { font-size: 22px; font-weight: 600; }
+      .sub, .muted { color: var(--muted); font-size: 13px; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #1f2937; vertical-align: top; }
+      th { color: var(--muted); font-weight: 500; }
+      .actions { white-space: nowrap; text-align: right; }
+      button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; }
+      button.secondary { background: #374151; }
+      button.danger { background: var(--danger); }
+      button.small { padding: 4px 8px; font-size: 12px; }
+      button:disabled { opacity: .5; cursor: default; }
+      input, select, textarea { background: #0f172a; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 14px; }
+      textarea { width: 100%; min-height: 380px; font-family: ui-monospace, monospace; font-size: 13px; }
+      form.inline { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+      form.inline label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+      form.inline label.check { flex-direction: row; align-items: center; gap: 6px; }
+      .chip { display: inline-flex; align-items: center; gap: 4px; background: #1f2937; border-radius: 999px; padding: 2px 8px; margin: 2px; font-size: 12px; }
+      .chip button { background: none; padding: 0 2px; color: var(--muted); }
+      .yes { color: var(--ok); } .no { color: var(--muted); } .fail { color: var(--danger); }
+      .view { display: none; } .view.active { display: block; }
+      #toast { position: fixed; right: 20px; bottom: 20px; max-width: 460px; padding: 12px 16px; border-radius: 10px; background: #1f2937; border: 1px solid var(--border); display: none; white-space: pre-wrap; font-size: 13px; }
+      #toast.error { border-color: var(--danger); }
+      dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px; min-width: 320px; }
+      dialog form { display: flex; flex-direction: column; gap: 10px; }
+      dialog::backdrop { background: rgba(0,0,0,.6); }
+      .warn { color: var(--danger); font-size: 12px; margin-top: 4px; }
+      .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #1e3a8a; color: #dbeafe; margin-left: 6px; }
+      body:not(.can-operator) .needs-operator, body:not(.can-admin) .needs-admin { display: none !important; }
+      .userbox { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 8px; }
+      .userbox strong { color: var(--text); }
+      .userbox button { width: 100%; }
+      #loginScreen { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; z-index: 10; }
+      #loginScreen.show { display: flex; }
+      #loginScreen form { width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 12px; }
+      pre.log { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; overflow: auto; max-height: 65vh; white-space: pre-wrap; word-break: break-all; margin: 0; }
+      .table-wrap { overflow-x: auto; }
+      @media (max-width: 760px) { .layout { flex-direction: column; } .sidebar { width: auto; } .nav { display: flex; flex-wrap: wrap; gap: 4px; } }
     </style>
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
         <div class="brand">CasaOS Native</div>
-        <nav class="nav">
-          <a href="#" class="active">Dashboard</a>
-          <a href="#services">Services</a>
-          <a href="#samba">Samba</a>
+        <nav class="nav" id="nav">
+          <a href="#dashboard">Dashboard</a>
           <a href="#users">Users</a>
+          <a href="#groups">Groups</a>
+          <a href="#shares">SMB shares</a>
+          <a href="#samba" class="needs-admin">Samba config</a>
+          <a href="#network">Network</a>
+          <a href="#services">Services</a>
+          <a href="#logs" class="needs-operator">Logs</a>
           <a href="#packages">Packages</a>
+          <a href="#accounts" class="needs-admin">Panel accounts</a>
+          <a href="#audit" class="needs-admin">Audit log</a>
         </nav>
+        <div class="userbox">
+          <span>Signed in as <strong id="meName">-</strong> (<span id="meRole">-</span>)</span>
+          <button class="secondary small" id="ownPwBtn">Change my password</button>
+          <button class="secondary small" id="logoutBtn">Sign out</button>
+        </div>
       </aside>
 
       <main class="content">
-        <div class="header">
-          <h1>Dashboard</h1>
-          <span class="badge" id="modeBadge">system mode</span>
-        </div>
-
-        <section class="grid">
-          <div class="card">
-            <div class="label">Host</div>
-            <div class="value" id="hostname">-</div>
-            <div class="sub" id="osInfo">-</div>
-          </div>
-          <div class="card">
-            <div class="label">CPU Load</div>
-            <div class="value" id="loadValue">-</div>
-            <div class="sub">1m / 5m / 15m</div>
-          </div>
-          <div class="card">
-            <div class="label">RAM</div>
-            <div class="value" id="ramValue">-</div>
-            <div class="sub" id="ramSub">-</div>
-          </div>
-          <div class="card">
-            <div class="label">Disk</div>
-            <div class="value" id="diskValue">-</div>
-            <div class="sub" id="diskSub">-</div>
+        <section class="view" id="view-dashboard">
+          <div class="header"><h1>Dashboard</h1><span class="badge" id="modeBadge">-</span></div>
+          <div class="grid">
+            <div class="card"><div class="label">Host</div><div class="value" id="hostname">-</div><div class="sub" id="osInfo">-</div></div>
+            <div class="card"><div class="label">CPU load</div><div class="value" id="loadValue">-</div><div class="sub">1m / 5m / 15m</div></div>
+            <div class="card"><div class="label">RAM</div><div class="value" id="ramValue">-</div><div class="sub" id="ramSub">-</div></div>
+            <div class="card"><div class="label">Disk /</div><div class="value" id="diskValue">-</div><div class="sub" id="diskSub">-</div></div>
+            <div class="card"><div class="label">Uptime</div><div class="value" id="uptimeValue">-</div><div class="sub" id="netSub">-</div></div>
           </div>
         </section>
 
-        <section class="two-col">
-          <div class="card">
-            <div class="label">Services</div>
-            <ul class="status-list" id="serviceList"></ul>
+        <section class="view" id="view-users">
+          <div class="header"><h1>Users</h1></div>
+          <div class="card needs-operator">
+            <h2>Create user</h2>
+            <form class="inline" id="createUserForm">
+              <label>Username <input name="username" required pattern="[a-z_][a-z0-9_\-]{0,31}" /></label>
+              <label>Password <input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>
+              <label>Groups (comma separated) <input name="groups" placeholder="users" /></label>
+              <label>Shell
+                <select name="shell">
+                  <option value="/usr/sbin/nologin">no login (Samba only)</option>
+                  <option value="/bin/bash">/bin/bash</option>
+                  <option value="">system default</option>
+                </select>
+              </label>
+              <label class="check"><input type="checkbox" name="samba" checked /> Samba login</label>
+              <button type="submit">Create</button>
+            </form>
+            <div class="warn" id="casaShellHint" hidden>CasaOS runs on this host. For security reasons only admins can create accounts with a login shell. Use "no login (Samba only)" for file sharing.</div>
           </div>
-
           <div class="card">
-            <div class="label">Packages</div>
-            <ul class="package-list" id="packageList"></ul>
+            <label class="muted"><input type="checkbox" id="showSystemUsers" /> show system accounts</label>
+            <table>
+              <thead><tr><th>User</th><th>UID</th><th>Groups</th><th>Samba</th><th>Shell</th><th></th></tr></thead>
+              <tbody id="userTable"></tbody>
+            </table>
+            <div class="muted" id="sambaHint"></div>
           </div>
         </section>
 
-        <div style="height: 22px"></div>
-
-        <section class="card" id="samba">
-          <div class="label">Samba config</div>
-          <textarea id="sambaConfig"></textarea>
-          <div class="button-row">
-            <button id="saveSambaBtn">Save config</button>
-            <button class="secondary" id="refreshSambaBtn">Refresh</button>
+        <section class="view" id="view-groups">
+          <div class="header"><h1>Groups</h1></div>
+          <div class="card needs-operator">
+            <form class="inline" id="createGroupForm">
+              <label>Group name <input name="name" required pattern="[a-z_][a-z0-9_\-]{0,31}" /></label>
+              <button type="submit">Create group</button>
+            </form>
           </div>
-          <div id="sambaStatus" class="muted" style="margin-top: 12px; min-height: 20px;"></div>
+          <div class="card">
+            <label class="muted"><input type="checkbox" id="showSystemGroups" /> show system groups</label>
+            <table>
+              <thead><tr><th>Group</th><th>GID</th><th>Members</th><th></th></tr></thead>
+              <tbody id="groupTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-shares">
+          <div class="header"><h1>SMB shares</h1></div>
+          <div class="card needs-operator">
+            <h2 id="shareFormTitle">New share</h2>
+            <form class="inline" id="shareForm">
+              <label>Name <input name="name" required /></label>
+              <label>Path <input name="path" required placeholder="/srv/share" /></label>
+              <label>Comment <input name="comment" /></label>
+              <label>Allowed users (empty = all) <input name="valid_users" placeholder="alice @family" /></label>
+              <label>Write list <input name="write_list" placeholder="alice" /></label>
+              <label class="check"><input type="checkbox" name="read_only" /> read only</label>
+              <label class="check"><input type="checkbox" name="browseable" checked /> visible</label>
+              <label class="check"><input type="checkbox" name="guest_ok" /> guest access</label>
+              <button type="submit">Save share</button>
+              <button type="button" class="secondary" id="shareFormReset">Clear</button>
+            </form>
+            <div class="muted" style="margin-top:10px">Changes are checked with <code>testparm</code>, a backup of smb.conf is kept and smbd is reloaded.</div>
+          </div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Share</th><th>Path</th><th>Access</th><th>Users</th><th></th></tr></thead>
+              <tbody id="shareTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-samba">
+          <div class="header"><h1>Samba config</h1></div>
+          <div class="card">
+            <textarea id="sambaConfig" spellcheck="false"></textarea>
+            <div style="margin-top:12px; display:flex; gap:10px">
+              <button id="saveSambaBtn">Validate &amp; save</button>
+              <button class="secondary" id="refreshSambaBtn">Reload</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-services">
+          <div class="header"><h1>Services</h1></div>
+          <div class="card">
+            <input id="serviceFilter" placeholder="filter" style="margin-bottom:10px" />
+            <table>
+              <thead><tr><th>Service</th><th>Status</th><th>Autostart</th><th></th></tr></thead>
+              <tbody id="serviceTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-packages">
+          <div class="header"><h1>Packages</h1></div>
+          <div class="card">
+            <input id="packageFilter" placeholder="filter" style="margin-bottom:10px" />
+            <table>
+              <thead><tr><th>Package</th><th>Version</th><th>Status</th></tr></thead>
+              <tbody id="packageTable"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="view" id="view-network">
+          <div class="header"><h1>Network</h1><span class="badge">read only</span></div>
+          <div class="grid">
+            <div class="card"><div class="label">Default gateway</div><div class="value" id="gatewayValue">-</div></div>
+            <div class="card"><div class="label">DNS servers</div><div class="value" id="dnsValue" style="font-size:16px">-</div></div>
+          </div>
+          <div class="card table-wrap">
+            <table>
+              <thead><tr><th>Interface</th><th>State</th><th>Addresses</th><th>MAC</th><th>Speed</th><th>Traffic</th></tr></thead>
+              <tbody id="networkTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-logs">
+          <div class="header"><h1>Logs</h1></div>
+          <div class="card">
+            <form class="inline" id="logForm" style="margin-bottom:12px">
+              <label>Service (empty = whole system) <input name="unit" placeholder="smbd" list="unitList" /></label>
+              <datalist id="unitList"></datalist>
+              <label>Min. priority
+                <select name="priority">
+                  <option value="">all</option>
+                  <option value="err">errors</option>
+                  <option value="warning">warnings</option>
+                  <option value="notice">notice</option>
+                  <option value="info">info</option>
+                </select>
+              </label>
+              <label>Lines <input name="lines" type="number" min="10" max="2000" value="200" /></label>
+              <button type="submit">Show</button>
+            </form>
+            <pre class="log" id="logOutput"></pre>
+          </div>
+        </section>
+
+        <section class="view" id="view-accounts">
+          <div class="header"><h1>Panel accounts</h1></div>
+          <div class="card">
+            <h2>Add account</h2>
+            <form class="inline" id="createAccountForm">
+              <label>Username <input name="username" required pattern="[a-z_][a-z0-9_\-]{0,31}" /></label>
+              <label>Password <input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>
+              <label>Role
+                <select name="role">
+                  <option value="viewer">viewer – read only</option>
+                  <option value="operator">operator – users, groups, shares, services</option>
+                  <option value="admin">admin – everything</option>
+                </select>
+              </label>
+              <button type="submit">Add</button>
+            </form>
+            <div class="muted" style="margin-top:10px">Panel accounts only control access to this panel. They are separate from Linux and Samba users.</div>
+          </div>
+          <div class="card table-wrap">
+            <table>
+              <thead><tr><th>Account</th><th>Role</th><th>Created</th><th></th></tr></thead>
+              <tbody id="accountTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-audit">
+          <div class="header"><h1>Audit log</h1><span class="badge">last 500 entries</span></div>
+          <div class="card table-wrap">
+            <table>
+              <thead><tr><th>Time</th><th>Account</th><th>Action</th><th>Target</th><th>Result</th><th>Client</th></tr></thead>
+              <tbody id="auditTable"></tbody>
+            </table>
+          </div>
         </section>
       </main>
     </div>
 
-    <script>
-... (omitted for brevity) ...
-      function renderDashboard(data) {
-        const overview = data?.overview || {};
-        const metrics = data?.metrics || {};
-        const services = data?.services || [];
+    <dialog id="pwDialog">
+      <form method="dialog" id="pwForm">
+        <strong id="pwTitle">Set password</strong>
+        <input type="password" name="pw1" placeholder="new password" minlength="8" required autocomplete="new-password" />
+        <input type="password" name="pw2" placeholder="repeat password" minlength="8" required autocomplete="new-password" />
+        <div style="display:flex; gap:8px; justify-content:end">
+          <button type="button" class="secondary" id="pwCancel">Cancel</button>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
 
-        document.getElementById('hostname').textContent = overview.hostname || 'unknown';
-        document.getElementById('osInfo').textContent = overview.os || 'unknown';
-        document.getElementById('modeBadge').textContent = (overview.mode || 'system') + ' mode';
+    <dialog id="ownPwDialog">
+      <form method="dialog" id="ownPwForm">
+        <strong>Change my password</strong>
+        <input type="password" name="current" placeholder="current password" required autocomplete="current-password" />
+        <input type="password" name="pw1" placeholder="new password" minlength="8" required autocomplete="new-password" />
+        <input type="password" name="pw2" placeholder="repeat new password" minlength="8" required autocomplete="new-password" />
+        <div style="display:flex; gap:8px; justify-content:end">
+          <button type="button" class="secondary" id="ownPwCancel">Cancel</button>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
 
-        document.getElementById('loadValue').textContent = `${Number(metrics.load1 || 0).toFixed(2)} / ${Number(metrics.load5 || 0).toFixed(2)} / ${Number(metrics.load15 || 0).toFixed(2)}`;
+    <div id="loginScreen">
+      <form class="card" id="loginForm">
+        <h1>CasaOS Native Panel</h1>
+        <input name="username" placeholder="username" required autocomplete="username" />
+        <input name="password" type="password" placeholder="password" required autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+        <button type="button" class="secondary" id="casaLoginBtn" hidden>Sign in with CasaOS account</button>
+        <div class="muted" id="loginError" style="min-height:18px"></div>
+      </form>
+    </div>
 
-        const memTotal = Number(metrics.mem_total_kb || 0);
-        const memAvail = Number(metrics.mem_available_kb || 0);
-        const memUsed = memTotal - memAvail;
-        const memPct = memTotal > 0 ? Math.round((memUsed / memTotal) * 100) : 0;
-        document.getElementById('ramValue').textContent = `${(memUsed/1024).toFixed(1)} MB`;
-        document.getElementById('ramSub').textContent = `${memPct}% used of ${(memTotal/1024).toFixed(0)} MB`;
+    <div id="toast"></div>
 
-        const diskPct = Number(metrics.disk_used_percent || 0).toFixed(1);
-        document.getElementById('diskValue').textContent = `${diskPct}%`;
-        document.getElementById('diskSub').textContent = `Free ${(Number(metrics.disk_free_bytes||0)/(1024*1024*1024)).toFixed(2)} GB of ${(Number(metrics.disk_total_bytes||0)/(1024*1024*1024)).toFixed(2)} GB`;
-
-        document.getElementById('serviceList').innerHTML = services.map(service => `
-          <li>
-            <span><span class="status-dot"></span>${service.name}</span>
-            <span class="muted">${service.state || 'unknown'}</span>
-          </li>
-        `).join('') || '<li class="muted">No services</li>';
-      }
-
-      async function loadDashboard() {
-        try {
-          const data = await fetchJSON('/api/v1/dashboard');
-          const dashboard = data.data || {};
-          state.dashboard = dashboard;
-          renderDashboard(dashboard);
-        } catch (err) {
-          console.error(err);
-        }
-      }
-
-... (omitted for brevity) ...
-    </script>
+    <script src="app.js"></script>
   </body>
 </html>

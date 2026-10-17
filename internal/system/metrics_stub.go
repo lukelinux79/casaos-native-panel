@@ -1,8 +1,11 @@
+//go:build !linux
+
 package system
 
-// non-Linux stub for GetMetrics so the project can build on Windows (or other OSes).
-// The real implementation lives in metrics.go with a //go:build linux tag.
+import model "github.com/lukelinux79/casaos-native-panel/internal/model"
 
-func GetMetrics() (Metrics, error) {
-	return Metrics{}, nil
+// GetMetrics is a non-Linux stub so the project can build on Windows or macOS.
+// The real implementation lives in metrics.go.
+func GetMetrics() (model.Metrics, error) {
+	return model.Metrics{}, nil
 }

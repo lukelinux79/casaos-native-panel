@@ -5,6 +5,8 @@ set -euo pipefail
 # Usage: sudo bash scripts/reverse-proxy-setup.sh your.domain.tld
 
 DOMAIN="${1:-}"
+# Where Nginx forwards to: the panel itself, or the CasaOS gateway (see README.proxy.md).
+UPSTREAM="${UPSTREAM:-http://127.0.0.1:8080}"
 if [ -z "${DOMAIN}" ]; then
   echo "Usage: $0 your.domain.tld"
   exit 1
@@ -33,20 +35,21 @@ server {
     server_name ${DOMAIN};
 
     location / {
-        proxy_pass http://127.0.0.1:8080/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass ${UPSTREAM};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
 EOF
 
 ln -sf "${NGINX_CONF}" /etc/nginx/sites-enabled/casaos_native
 nginx -t
-systemctl reload nginx
+systemctl reload-or-restart nginx
 
 # Obtain TLS cert with certbot
 certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos -m "admin@${DOMAIN}"
 
 echo "Reverse proxy configured for ${DOMAIN}. HTTPS should be active."
+echo "Set CASAOS_HOST=127.0.0.1 in /etc/casaos-native-panel.env and restart the panel so it is only reachable through Nginx or the CasaOS gateway."
