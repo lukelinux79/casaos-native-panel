@@ -14,6 +14,8 @@ type Service struct {
 	Name    string `json:"name"`
 	State   string `json:"state"`
 	Enabled bool   `json:"enabled"`
+	// Active is the runtime state from systemd, e.g. active, inactive or failed.
+	Active string `json:"active"`
 }
 
 type Package struct {

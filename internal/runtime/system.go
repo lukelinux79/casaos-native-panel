@@ -102,6 +102,7 @@ func (s *SystemRuntime) GetServices() ([]Service, error) {
 		return []Service{}, nil
 	}
 
+	active := activeStates()
 	lines := strings.Split(out, "\n")
 	result := make([]Service, 0, len(lines))
 	for _, line := range lines {
@@ -109,13 +110,35 @@ func (s *SystemRuntime) GetServices() ([]Service, error) {
 		if len(parts) < 2 || !strings.HasSuffix(parts[0], ".service") || strings.Contains(parts[0], "@.") {
 			continue
 		}
+		state, ok := active[parts[0]]
+		if !ok {
+			state = "inactive"
+		}
 		result = append(result, Service{
 			Name:    strings.TrimSuffix(parts[0], ".service"),
 			State:   parts[1],
 			Enabled: parts[1] == "enabled",
+			Active:  state,
 		})
 	}
 	return result, nil
+}
+
+// activeStates maps loaded service units to their ACTIVE column (active, failed, ...).
+// Units that are not loaded are missing and therefore inactive.
+func activeStates() map[string]string {
+	states := map[string]string{}
+	out, err := shellOut("systemctl", "list-units", "--type=service", "--all", "--no-pager", "--plain", "--no-legend")
+	if err != nil {
+		return states
+	}
+	for _, line := range strings.Split(out, "\n") {
+		// UNIT LOAD ACTIVE SUB DESCRIPTION
+		if f := strings.Fields(line); len(f) >= 3 {
+			states[f[0]] = f[2]
+		}
+	}
+	return states
 }
 
 func (s *SystemRuntime) StartService(name string) error   { return s.serviceAction("start", name) }

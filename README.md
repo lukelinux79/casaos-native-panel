@@ -14,11 +14,11 @@ A simple, debian-first management panel based on CasaOS concepts but designed fo
 - Linux users and groups: create, delete, passwords, group membership
 - SMB: share editor (path, read only, guest, allowed users or `@groups`, write list),
   Samba logins per user, raw `smb.conf` editor
-- Every `smb.conf` change is validated with `testparm`, backed up (`smb.conf.bak.<time>`) and smbd is reloaded
+- Every `smb.conf` change is validated with `testparm` (unknown parameters, usually typos, are rejected too), backed up (`smb.conf.bak.<time>`) and smbd is reloaded
 - Several panel accounts with roles, login with session cookie, audit log of all changes
 - Network overview (interfaces, addresses, gateway, DNS) – read only
 - Log viewer for the systemd journal, per service and priority
-- Service start / stop / restart, package list
+- Services with running state and autostart, start / stop / restart, package list
 
 Not included yet: changing the network configuration, installing packages from the UI, Docker app management.
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -42,6 +43,10 @@ func SaveSambaConfig(content string) error {
 	if err != nil {
 		return fmt.Errorf("testparm validation failed: %w\noutput:\n%s", err, string(out))
 	}
+	if unknown := unknownParameters(string(out)); len(unknown) > 0 {
+		// testparm only warns about these, but they are almost always typos.
+		return fmt.Errorf("testparm validation failed: unknown parameter(s): %s", strings.Join(unknown, ", "))
+	}
 
 	if _, err := os.Stat(confPath); err == nil {
 		bakPath := filepath.Join(confDir, fmt.Sprintf("smb.conf.bak.%d", time.Now().Unix()))
@@ -63,4 +68,17 @@ func SaveSambaConfig(content string) error {
 	}
 
 	return nil
+}
+
+// unknownParameters extracts names from testparm lines like
+// `Unknown parameter encountered: "pathh"`.
+func unknownParameters(output string) []string {
+	var names []string
+	for _, line := range strings.Split(output, "\n") {
+		_, after, ok := strings.Cut(line, "Unknown parameter encountered:")
+		if ok {
+			names = append(names, strings.TrimSpace(after))
+		}
+	}
+	return names
 }

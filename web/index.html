@@ -43,7 +43,7 @@
       form.inline label.check { flex-direction: row; align-items: center; gap: 6px; }
       .chip { display: inline-flex; align-items: center; gap: 4px; background: #1f2937; border-radius: 999px; padding: 2px 8px; margin: 2px; font-size: 12px; }
       .chip button { background: none; padding: 0 2px; color: var(--muted); }
-      .yes { color: var(--ok); } .no { color: var(--muted); }
+      .yes { color: var(--ok); } .no { color: var(--muted); } .fail { color: var(--danger); }
       .view { display: none; } .view.active { display: block; }
       #toast { position: fixed; right: 20px; bottom: 20px; max-width: 460px; padding: 12px 16px; border-radius: 10px; background: #1f2937; border: 1px solid var(--border); display: none; white-space: pre-wrap; font-size: 13px; }
       #toast.error { border-color: var(--danger); }
@@ -186,7 +186,7 @@
           <div class="card">
             <input id="serviceFilter" placeholder="filter" style="margin-bottom:10px" />
             <table>
-              <thead><tr><th>Service</th><th>Unit state</th><th></th></tr></thead>
+              <thead><tr><th>Service</th><th>Status</th><th>Autostart</th><th></th></tr></thead>
               <tbody id="serviceTable"></tbody>
             </table>
           </div>
@@ -553,15 +553,16 @@
         const q = $('serviceFilter').value.toLowerCase();
         $('serviceTable').innerHTML = state.services.filter((s) => s.name.toLowerCase().includes(q)).map((s) => {
           const n = esc(s.name);
-          return `<tr><td>${n}</td><td class="${s.enabled ? 'yes' : 'no'}">${esc(s.state)}</td><td class="actions">
+          const color = s.active === 'active' ? 'yes' : s.active === 'failed' ? 'fail' : 'no';
+          return `<tr><td>${n}</td><td class="${color}">${esc(s.active || '-')}</td><td class="${s.enabled ? 'yes' : 'no'}">${esc(s.state)}</td><td class="actions">
             ${can('operator') ? ['start', 'stop', 'restart'].map((a) => `<button class="small secondary" data-act="${a}" data-svc="${n}">${a}</button>`).join(' ') : ''}</td></tr>`;
-        }).join('') || '<tr><td colspan="3" class="muted">No services</td></tr>';
+        }).join('') || '<tr><td colspan="4" class="muted">No services</td></tr>';
       }
       $('serviceFilter').addEventListener('input', renderServices);
       $('serviceTable').addEventListener('click', (e) => {
         const b = e.target.closest('button[data-act]'); if (!b) return;
         if (b.dataset.act !== 'start' && !confirm(`${b.dataset.act} ${b.dataset.svc}?`)) return;
-        act(() => fetchJSON(`/api/v1/services/${encodeURIComponent(b.dataset.svc)}/${b.dataset.act}`, { method: 'POST', body: {} }), `${b.dataset.svc}: ${b.dataset.act} ok`);
+        act(() => fetchJSON(`/api/v1/services/${encodeURIComponent(b.dataset.svc)}/${b.dataset.act}`, { method: 'POST', body: {} }), `${b.dataset.svc}: ${b.dataset.act} ok`, loadServices);
       });
 
       async function loadPackages() {
