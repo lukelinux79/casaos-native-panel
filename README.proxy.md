@@ -17,10 +17,11 @@ Ensure DNS for your domain points to the server's public IP before running.
 
 ## Admin credentials
 
-Set the admin account by environment variables for the systemd service (example):
+The first admin account is created from environment variables on first start, e.g. in `/etc/casaos-native-panel.env`:
 
-Environment=CASAOS_ADMIN_USER=admin
-Environment=CASAOS_ADMIN_PASSWORD=secret
+    CASAOS_ADMIN_USER=admin
+    CASAOS_ADMIN_PASSWORD=secret-with-8-chars-or-more
 
-Both variables are required; the panel refuses to start without them (password min. 8 characters).
-Restart the service after updating the unit file.
+After the first login further accounts are managed in the panel under *Panel accounts*; the variables can then be removed.
+Behind the proxy set `CASAOS_HOST=127.0.0.1` so the panel is only reachable through Nginx.
+The session cookie is marked `Secure` automatically when Nginx forwards `X-Forwarded-Proto: https`.

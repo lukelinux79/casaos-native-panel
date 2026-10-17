@@ -1,0 +1,17 @@
+[Unit]
+Description=CasaOS Native Panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The panel manages users, Samba and services and therefore runs as root.
+ExecStart=/opt/casaos-native-panel/casaos-native-panel
+Environment=CASAOS_WEB_DIR=/opt/casaos-native-panel/web
+Environment=CASAOS_DATA_DIR=/var/lib/casaos-native-panel
+# Settings like CASAOS_HOST or the first admin (CASAOS_ADMIN_USER/PASSWORD) go here:
+EnvironmentFile=-/etc/casaos-native-panel.env
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

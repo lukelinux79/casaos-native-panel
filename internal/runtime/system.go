@@ -1,7 +1,11 @@
 package runtime
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -44,6 +48,52 @@ func (s *SystemRuntime) GetOverview() (Overview, error) {
 // GetMetrics collects native system metrics.
 func (s *SystemRuntime) GetMetrics() (Metrics, error) {
 	return sys.GetMetrics()
+}
+
+func (s *SystemRuntime) GetNetwork() (Network, error) {
+	return sys.GetNetwork()
+}
+
+var logPriorities = map[string]bool{
+	"emerg": true, "alert": true, "crit": true, "err": true,
+	"warning": true, "notice": true, "info": true, "debug": true,
+}
+
+const maxLogLines = 2000
+
+// GetLogs reads the systemd journal, optionally for one unit and up to a priority.
+func (s *SystemRuntime) GetLogs(q LogQuery) ([]string, error) {
+	if q.Lines <= 0 {
+		q.Lines = 200
+	}
+	if q.Lines > maxLogLines {
+		return nil, validate.Errorf("lines must be at most %d", maxLogLines)
+	}
+	args := []string{"--no-pager", "--quiet", "-o", "short-iso", "-n", strconv.Itoa(q.Lines)}
+	if q.Unit != "" {
+		if err := validate.ServiceName(q.Unit); err != nil {
+			return nil, err
+		}
+		args = append(args, "-u", q.Unit)
+	}
+	if q.Priority != "" {
+		if !logPriorities[q.Priority] {
+			return nil, validate.Errorf("invalid priority %q", q.Priority)
+		}
+		args = append(args, "-p", q.Priority)
+	}
+	out, err := exec.Command("journalctl", args...).Output()
+	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return nil, fmt.Errorf("journalctl not available: %w", ErrUnsupported)
+		}
+		return nil, fmt.Errorf("journalctl failed: %w", err)
+	}
+	text := strings.TrimRight(string(out), "\n")
+	if text == "" {
+		return []string{}, nil
+	}
+	return strings.Split(text, "\n"), nil
 }
 
 func (s *SystemRuntime) GetServices() ([]Service, error) {

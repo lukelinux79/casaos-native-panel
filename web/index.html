@@ -50,6 +50,15 @@
       dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px; min-width: 320px; }
       dialog form { display: flex; flex-direction: column; gap: 10px; }
       dialog::backdrop { background: rgba(0,0,0,.6); }
+      body:not(.can-operator) .needs-operator, body:not(.can-admin) .needs-admin { display: none !important; }
+      .userbox { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 8px; }
+      .userbox strong { color: var(--text); }
+      .userbox button { width: 100%; }
+      #loginScreen { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; z-index: 10; }
+      #loginScreen.show { display: flex; }
+      #loginScreen form { width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 12px; }
+      pre.log { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; overflow: auto; max-height: 65vh; white-space: pre-wrap; word-break: break-all; margin: 0; }
+      .table-wrap { overflow-x: auto; }
       @media (max-width: 760px) { .layout { flex-direction: column; } .sidebar { width: auto; } .nav { display: flex; flex-wrap: wrap; gap: 4px; } }
     </style>
   </head>
@@ -62,10 +71,19 @@
           <a href="#users">Users</a>
           <a href="#groups">Groups</a>
           <a href="#shares">SMB shares</a>
-          <a href="#samba">Samba config</a>
+          <a href="#samba" class="needs-admin">Samba config</a>
+          <a href="#network">Network</a>
           <a href="#services">Services</a>
+          <a href="#logs" class="needs-operator">Logs</a>
           <a href="#packages">Packages</a>
+          <a href="#accounts" class="needs-admin">Panel accounts</a>
+          <a href="#audit" class="needs-admin">Audit log</a>
         </nav>
+        <div class="userbox">
+          <span>Signed in as <strong id="meName">-</strong> (<span id="meRole">-</span>)</span>
+          <button class="secondary small" id="ownPwBtn">Change my password</button>
+          <button class="secondary small" id="logoutBtn">Sign out</button>
+        </div>
       </aside>
 
       <main class="content">
@@ -82,7 +100,7 @@
 
         <section class="view" id="view-users">
           <div class="header"><h1>Users</h1></div>
-          <div class="card">
+          <div class="card needs-operator">
             <h2>Create user</h2>
             <form class="inline" id="createUserForm">
               <label>Username <input name="username" required pattern="[a-z_][a-z0-9_\-]{0,31}" /></label>
@@ -111,7 +129,7 @@
 
         <section class="view" id="view-groups">
           <div class="header"><h1>Groups</h1></div>
-          <div class="card">
+          <div class="card needs-operator">
             <form class="inline" id="createGroupForm">
               <label>Group name <input name="name" required pattern="[a-z_][a-z0-9_\-]{0,31}" /></label>
               <button type="submit">Create group</button>
@@ -128,7 +146,7 @@
 
         <section class="view" id="view-shares">
           <div class="header"><h1>SMB shares</h1></div>
-          <div class="card">
+          <div class="card needs-operator">
             <h2 id="shareFormTitle">New share</h2>
             <form class="inline" id="shareForm">
               <label>Name <input name="name" required /></label>
@@ -184,6 +202,77 @@
             </table>
           </div>
         </section>
+        <section class="view" id="view-network">
+          <div class="header"><h1>Network</h1><span class="badge">read only</span></div>
+          <div class="grid">
+            <div class="card"><div class="label">Default gateway</div><div class="value" id="gatewayValue">-</div></div>
+            <div class="card"><div class="label">DNS servers</div><div class="value" id="dnsValue" style="font-size:16px">-</div></div>
+          </div>
+          <div class="card table-wrap">
+            <table>
+              <thead><tr><th>Interface</th><th>State</th><th>Addresses</th><th>MAC</th><th>Speed</th><th>Traffic</th></tr></thead>
+              <tbody id="networkTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-logs">
+          <div class="header"><h1>Logs</h1></div>
+          <div class="card">
+            <form class="inline" id="logForm" style="margin-bottom:12px">
+              <label>Service (empty = whole system) <input name="unit" placeholder="smbd" list="unitList" /></label>
+              <datalist id="unitList"></datalist>
+              <label>Min. priority
+                <select name="priority">
+                  <option value="">all</option>
+                  <option value="err">errors</option>
+                  <option value="warning">warnings</option>
+                  <option value="notice">notice</option>
+                  <option value="info">info</option>
+                </select>
+              </label>
+              <label>Lines <input name="lines" type="number" min="10" max="2000" value="200" /></label>
+              <button type="submit">Show</button>
+            </form>
+            <pre class="log" id="logOutput"></pre>
+          </div>
+        </section>
+
+        <section class="view" id="view-accounts">
+          <div class="header"><h1>Panel accounts</h1></div>
+          <div class="card">
+            <h2>Add account</h2>
+            <form class="inline" id="createAccountForm">
+              <label>Username <input name="username" required pattern="[a-z_][a-z0-9_\-]{0,31}" /></label>
+              <label>Password <input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>
+              <label>Role
+                <select name="role">
+                  <option value="viewer">viewer – read only</option>
+                  <option value="operator">operator – users, groups, shares, services</option>
+                  <option value="admin">admin – everything</option>
+                </select>
+              </label>
+              <button type="submit">Add</button>
+            </form>
+            <div class="muted" style="margin-top:10px">Panel accounts only control access to this panel. They are separate from Linux and Samba users.</div>
+          </div>
+          <div class="card table-wrap">
+            <table>
+              <thead><tr><th>Account</th><th>Role</th><th>Created</th><th></th></tr></thead>
+              <tbody id="accountTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-audit">
+          <div class="header"><h1>Audit log</h1><span class="badge">last 500 entries</span></div>
+          <div class="card table-wrap">
+            <table>
+              <thead><tr><th>Time</th><th>Account</th><th>Action</th><th>Target</th><th>Result</th><th>Client</th></tr></thead>
+              <tbody id="auditTable"></tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -199,10 +288,35 @@
       </form>
     </dialog>
 
+    <dialog id="ownPwDialog">
+      <form method="dialog" id="ownPwForm">
+        <strong>Change my password</strong>
+        <input type="password" name="current" placeholder="current password" required autocomplete="current-password" />
+        <input type="password" name="pw1" placeholder="new password" minlength="8" required autocomplete="new-password" />
+        <input type="password" name="pw2" placeholder="repeat new password" minlength="8" required autocomplete="new-password" />
+        <div style="display:flex; gap:8px; justify-content:end">
+          <button type="button" class="secondary" id="ownPwCancel">Cancel</button>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="loginScreen">
+      <form class="card" id="loginForm">
+        <h1>CasaOS Native Panel</h1>
+        <input name="username" placeholder="username" required autocomplete="username" />
+        <input name="password" type="password" placeholder="password" required autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+        <div class="muted" id="loginError" style="min-height:18px"></div>
+      </form>
+    </div>
+
     <div id="toast"></div>
 
     <script>
-      const state = { users: [], groups: [], sambaUsers: [], sambaAvailable: true, shares: [], services: [], packages: [] };
+      const state = { me: null, users: [], groups: [], sambaUsers: [], sambaAvailable: true, shares: [], services: [], packages: [], accounts: [] };
+      const roleRank = { viewer: 1, operator: 2, admin: 3 };
+      const can = (role) => !!state.me && roleRank[state.me.role] >= roleRank[role];
       const $ = (id) => document.getElementById(id);
 
       function esc(v) {
@@ -219,6 +333,7 @@
         const text = await res.text();
         let data = {};
         try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text }; }
+        if (res.status === 401 && !url.endsWith('/auth/login')) { showLogin(); throw new Error('Please sign in'); }
         if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
         return data;
       }
@@ -300,7 +415,7 @@
         const rows = state.users.filter((u) => showSystem || !u.system).map((u) => {
           const smb = state.sambaUsers.includes(u.username);
           const n = esc(u.username);
-          const btns = u.system ? '<span class="muted">system</span>' : `
+          const btns = u.system ? '<span class="muted">system</span>' : !can('operator') ? '' : `
             <button class="small secondary" data-act="pw" data-user="${n}">Password</button>
             ${state.sambaAvailable ? `<button class="small secondary" data-act="smbpw" data-user="${n}">${smb ? 'Samba password' : 'Enable Samba'}</button>` : ''}
             ${smb ? `<button class="small secondary" data-act="smbdel" data-user="${n}">Disable Samba</button>` : ''}
@@ -346,10 +461,10 @@
         const regularUsers = state.users.filter((u) => !u.system).map((u) => u.username);
         $('groupTable').innerHTML = state.groups.filter((g) => showSystem || !g.system).map((g) => {
           const n = esc(g.name);
-          const members = (g.members || []).map((m) => `<span class="chip">${esc(m)}${regularUsers.includes(m) ? `<button title="remove" data-act="rm" data-group="${n}" data-user="${esc(m)}">×</button>` : ''}</span>`).join('');
-          const candidates = regularUsers.filter((u) => !(g.members || []).includes(u));
+          const members = (g.members || []).map((m) => `<span class="chip">${esc(m)}${regularUsers.includes(m) && can('operator') ? `<button title="remove" data-act="rm" data-group="${n}" data-user="${esc(m)}">×</button>` : ''}</span>`).join('');
+          const candidates = can('operator') ? regularUsers.filter((u) => !(g.members || []).includes(u)) : [];
           const add = candidates.length ? `<select data-group="${n}"><option value="">add member…</option>${candidates.map((u) => `<option>${esc(u)}</option>`).join('')}</select>` : '';
-          const del = g.system ? '' : `<button class="small danger" data-act="del" data-group="${n}">Delete</button>`;
+          const del = g.system || !can('operator') ? '' : `<button class="small danger" data-act="del" data-group="${n}">Delete</button>`;
           return `<tr><td>${n}</td><td>${g.gid}</td><td>${members || '<span class="muted">-</span>'}</td><td class="actions">${add} ${del}</td></tr>`;
         }).join('') || '<tr><td colspan="4" class="muted">No groups</td></tr>';
       }
@@ -388,7 +503,7 @@
           const n = esc(s.name);
           const access = [s.read_only ? 'read only' : 'read/write', s.guest_ok ? 'guest' : '', s.browseable ? '' : 'hidden'].filter(Boolean).join(', ');
           const users = (s.valid_users || []).length ? s.valid_users.map(esc).join(' ') : '<span class="muted">all</span>';
-          const btns = s.special ? '<span class="muted">built-in (edit in config)</span>' :
+          const btns = !can('operator') ? '' : s.special ? '<span class="muted">built-in (edit in config)</span>' :
             `<button class="small secondary" data-act="edit" data-share="${n}">Edit</button> <button class="small danger" data-act="del" data-share="${n}">Delete</button>`;
           return `<tr><td>${n}<div class="muted">${esc(s.comment)}</div></td><td>${esc(s.path)}</td><td>${access}</td><td>${users}</td><td class="actions">${btns}</td></tr>`;
         }).join('') || '<tr><td colspan="5" class="muted">No shares</td></tr>';
@@ -439,7 +554,7 @@
         $('serviceTable').innerHTML = state.services.filter((s) => s.name.toLowerCase().includes(q)).map((s) => {
           const n = esc(s.name);
           return `<tr><td>${n}</td><td class="${s.enabled ? 'yes' : 'no'}">${esc(s.state)}</td><td class="actions">
-            ${['start', 'stop', 'restart'].map((a) => `<button class="small secondary" data-act="${a}" data-svc="${n}">${a}</button>`).join(' ')}</td></tr>`;
+            ${can('operator') ? ['start', 'stop', 'restart'].map((a) => `<button class="small secondary" data-act="${a}" data-svc="${n}">${a}</button>`).join(' ') : ''}</td></tr>`;
         }).join('') || '<tr><td colspan="3" class="muted">No services</td></tr>';
       }
       $('serviceFilter').addEventListener('input', renderServices);
@@ -461,17 +576,147 @@
       }
       $('packageFilter').addEventListener('input', renderPackages);
 
+      /* ---------- network ---------- */
+      async function loadNetwork() {
+        const n = (await fetchJSON('/api/v1/network')).network || {};
+        $('gatewayValue').textContent = n.default_gateway || '-';
+        $('dnsValue').textContent = (n.dns_servers || []).join(', ') || '-';
+        $('networkTable').innerHTML = (n.interfaces || []).map((i) => `<tr>
+          <td>${esc(i.name)}${i.loopback ? ' <span class="muted">(loopback)</span>' : ''}</td>
+          <td class="${i.up ? 'yes' : 'no'}">${esc(i.oper_state || (i.up ? 'up' : 'down'))}</td>
+          <td>${(i.addresses || []).map(esc).join('<br>') || '<span class="muted">-</span>'}</td>
+          <td class="muted">${esc(i.mac || '-')}</td>
+          <td>${i.speed_mbps ? `${i.speed_mbps} Mbit/s` : '-'}</td>
+          <td class="muted">rx ${fmtBytes(i.rx_bytes)} · tx ${fmtBytes(i.tx_bytes)}</td></tr>`).join('');
+      }
+
+      /* ---------- logs ---------- */
+      async function loadLogs() {
+        const f = $('logForm');
+        if (!state.services.length) {
+          fetchJSON('/api/v1/services').then((d) => {
+            state.services = d.services || [];
+            $('unitList').innerHTML = state.services.map((s) => `<option value="${esc(s.name)}">`).join('');
+          }).catch(() => {});
+        }
+        const q = new URLSearchParams({ lines: f.lines.value || '200' });
+        if (f.unit.value.trim()) q.set('unit', f.unit.value.trim());
+        if (f.priority.value) q.set('priority', f.priority.value);
+        try {
+          const lines = (await fetchJSON(`/api/v1/logs?${q}`)).lines || [];
+          $('logOutput').textContent = lines.join('\n') || 'No entries.';
+          $('logOutput').scrollTop = $('logOutput').scrollHeight;
+        } catch (err) {
+          $('logOutput').textContent = err.message;
+        }
+      }
+      $('logForm').addEventListener('submit', (e) => { e.preventDefault(); loadLogs(); });
+
+      /* ---------- panel accounts ---------- */
+      async function loadAccounts() {
+        state.accounts = (await fetchJSON('/api/v1/accounts')).accounts || [];
+        $('accountTable').innerHTML = state.accounts.map((a) => {
+          const n = esc(a.username), self = a.username === state.me.username;
+          const roles = ['viewer', 'operator', 'admin'].map((r) => `<option ${r === a.role ? 'selected' : ''}>${r}</option>`).join('');
+          return `<tr><td>${n}${self ? ' <span class="muted">(you)</span>' : ''}</td>
+            <td><select data-account="${n}">${roles}</select></td>
+            <td class="muted">${esc(new Date(a.created_at).toLocaleString())}</td>
+            <td class="actions"><button class="small secondary" data-act="pw" data-account="${n}">Set password</button>
+            ${self ? '' : `<button class="small danger" data-act="del" data-account="${n}">Delete</button>`}</td></tr>`;
+        }).join('');
+      }
+      $('accountTable').addEventListener('change', (e) => {
+        const sel = e.target.closest('select[data-account]'); if (!sel) return;
+        act(() => fetchJSON(`/api/v1/accounts/${encodeURIComponent(sel.dataset.account)}`, { method: 'PUT', body: { role: sel.value } }),
+          `Role of ${sel.dataset.account} set to ${sel.value}`, async () => { await loadAccounts(); await refreshMe(); });
+      });
+      $('accountTable').addEventListener('click', async (e) => {
+        const b = e.target.closest('button[data-act]'); if (!b) return;
+        const name = b.dataset.account, enc = encodeURIComponent(name);
+        if (b.dataset.act === 'pw') {
+          const pw = await askPassword(`Panel password for ${name}`); if (pw === null) return;
+          act(() => fetchJSON(`/api/v1/accounts/${enc}`, { method: 'PUT', body: { password: pw } }), 'Password updated, sessions of this account were ended');
+        } else if (b.dataset.act === 'del' && confirm(`Delete panel account ${name}?`)) {
+          act(() => fetchJSON(`/api/v1/accounts/${enc}`, { method: 'DELETE' }), 'Account deleted', loadAccounts);
+        }
+      });
+      $('createAccountForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const f = e.target, body = { username: f.username.value.trim(), password: f.password.value, role: f.role.value };
+        act(async () => { await fetchJSON('/api/v1/accounts', { method: 'POST', body }); f.reset(); }, `Account ${body.username} created`, loadAccounts);
+      });
+
+      /* ---------- audit ---------- */
+      async function loadAudit() {
+        const entries = (await fetchJSON('/api/v1/audit')).entries || [];
+        $('auditTable').innerHTML = entries.map((e) => `<tr>
+          <td class="muted">${esc(new Date(e.time).toLocaleString())}</td><td>${esc(e.user)}</td><td>${esc(e.action)}</td>
+          <td class="muted">${esc(e.target)}</td><td class="${e.status < 400 ? 'yes' : 'no'}">${e.status < 400 ? 'ok' : esc(e.status)}</td>
+          <td class="muted">${esc(e.remote)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No entries yet</td></tr>';
+      }
+
+      /* ---------- session ---------- */
+      function showLogin() {
+        state.me = null;
+        $('loginScreen').classList.add('show');
+        $('loginForm').username.focus();
+      }
+      function applyMe(me) {
+        state.me = me;
+        document.body.classList.toggle('can-operator', can('operator'));
+        document.body.classList.toggle('can-admin', can('admin'));
+        $('meName').textContent = me.username;
+        $('meRole').textContent = me.role;
+        $('ownPwBtn').style.display = me.auth_disabled ? 'none' : '';
+        $('logoutBtn').style.display = me.auth_disabled ? 'none' : '';
+      }
+      async function refreshMe() { applyMe(await fetchJSON('/api/v1/auth/me')); }
+
+      $('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        try {
+          await fetchJSON('/api/v1/auth/login', { method: 'POST', body: { username: f.username.value.trim(), password: f.password.value } });
+          f.reset(); $('loginError').textContent = '';
+          await refreshMe();
+          $('loginScreen').classList.remove('show');
+          route();
+        } catch (err) {
+          $('loginError').textContent = err.message;
+        }
+      });
+      $('logoutBtn').addEventListener('click', async () => {
+        try { await fetchJSON('/api/v1/auth/logout', { method: 'POST', body: {} }); } catch {}
+        showLogin();
+      });
+      $('ownPwBtn').addEventListener('click', () => {
+        const dlg = $('ownPwDialog'), f = $('ownPwForm');
+        f.reset();
+        $('ownPwCancel').onclick = () => dlg.close();
+        f.onsubmit = (e) => {
+          e.preventDefault();
+          if (f.pw1.value !== f.pw2.value) { toast('Passwords do not match', true); return; }
+          const body = { current_password: f.current.value, new_password: f.pw1.value };
+          act(async () => { await fetchJSON('/api/v1/auth/password', { method: 'PUT', body }); dlg.close(); }, 'Password changed');
+        };
+        dlg.showModal();
+      });
+
       /* ---------- routing ---------- */
-      const loaders = { dashboard: loadDashboard, users: loadUsers, groups: loadUsers, shares: loadShares, samba: loadSambaConfig, services: loadServices, packages: loadPackages };
+      const loaders = { dashboard: loadDashboard, users: loadUsers, groups: loadUsers, shares: loadShares, samba: loadSambaConfig, network: loadNetwork,
+        services: loadServices, logs: loadLogs, packages: loadPackages, accounts: loadAccounts, audit: loadAudit };
+      const minRole = { samba: 'admin', accounts: 'admin', audit: 'admin', logs: 'operator' };
       function route() {
-        const view = location.hash.slice(1) in loaders ? location.hash.slice(1) : 'dashboard';
+        if (!state.me) return;
+        let view = location.hash.slice(1) in loaders ? location.hash.slice(1) : 'dashboard';
+        if (minRole[view] && !can(minRole[view])) view = 'dashboard';
         document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${view}`));
         document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === `#${view}`));
         loaders[view]().catch((err) => toast(err.message, true));
       }
       window.addEventListener('hashchange', route);
-      route();
-      setInterval(() => { if ($('view-dashboard').classList.contains('active')) loadDashboard().catch(() => {}); }, 10000);
+      refreshMe().then(route).catch(() => {});
+      setInterval(() => { if (state.me && $('view-dashboard').classList.contains('active')) loadDashboard().catch(() => {}); }, 10000);
     </script>
   </body>
 </html>

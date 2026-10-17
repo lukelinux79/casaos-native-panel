@@ -13,6 +13,8 @@ type Config struct {
 	Port int
 	// WebDir is the directory with the static UI files.
 	WebDir string
+	// DataDir holds panel accounts and the audit log.
+	DataDir string
 }
 
 func Load() (Config, error) {
@@ -21,7 +23,8 @@ func Load() (Config, error) {
 		Host: getenvDefault("CASAOS_HOST", "0.0.0.0"),
 		Port: getenvIntDefault("CASAOS_PORT", 8080),
 
-		WebDir: getenvDefault("CASAOS_WEB_DIR", "web"),
+		WebDir:  getenvDefault("CASAOS_WEB_DIR", "web"),
+		DataDir: getenvDefault("CASAOS_DATA_DIR", "/var/lib/casaos-native-panel"),
 	}
 
 	if cfg.Mode != "system" && cfg.Mode != "docker" {

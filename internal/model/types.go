@@ -75,3 +75,24 @@ type Metrics struct {
 	NetTxBytes     uint64  `json:"net_tx_bytes"`
 	UptimeSeconds  float64 `json:"uptime_seconds"`
 }
+
+// Interface describes one network interface.
+type Interface struct {
+	Name      string   `json:"name"`
+	MAC       string   `json:"mac,omitempty"`
+	MTU       int      `json:"mtu"`
+	Up        bool     `json:"up"`
+	Loopback  bool     `json:"loopback"`
+	OperState string   `json:"oper_state,omitempty"`
+	SpeedMbps int      `json:"speed_mbps,omitempty"`
+	Addresses []string `json:"addresses"`
+	RxBytes   uint64   `json:"rx_bytes"`
+	TxBytes   uint64   `json:"tx_bytes"`
+}
+
+// Network is a read-only snapshot of the network configuration.
+type Network struct {
+	Interfaces     []Interface `json:"interfaces"`
+	DefaultGateway string      `json:"default_gateway,omitempty"`
+	DNSServers     []string    `json:"dns_servers"`
+}

@@ -1,6 +1,10 @@
 package runtime
 
-import "fmt"
+import (
+	"fmt"
+
+	sys "github.com/lukelinux79/casaos-native-panel/internal/system"
+)
 
 // DockerRuntime is a compatibility layer for Docker mode.
 type DockerRuntime struct{}
@@ -15,7 +19,9 @@ func (d *DockerRuntime) GetOverview() (Overview, error) {
 	return Overview{Mode: "docker", OS: detectOSName()}, nil
 }
 
-func (d *DockerRuntime) GetMetrics() (Metrics, error) { return Metrics{}, nil }
+func (d *DockerRuntime) GetMetrics() (Metrics, error)       { return Metrics{}, nil }
+func (d *DockerRuntime) GetNetwork() (Network, error)       { return sys.GetNetwork() }
+func (d *DockerRuntime) GetLogs(LogQuery) ([]string, error) { return nil, ErrUnsupported }
 
 func (d *DockerRuntime) GetServices() ([]Service, error)  { return nil, nil }
 func (d *DockerRuntime) StartService(name string) error   { return nil }

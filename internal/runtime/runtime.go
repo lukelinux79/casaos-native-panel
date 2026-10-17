@@ -19,6 +19,14 @@ type NewUser = model.NewUser
 type Group = model.Group
 type Share = model.Share
 type Metrics = model.Metrics
+type Network = model.Network
+
+// LogQuery selects journal entries. Empty Unit means the whole system journal.
+type LogQuery struct {
+	Unit     string
+	Priority string
+	Lines    int
+}
 
 var (
 	ErrUnsupported  = errors.New("not supported in this runtime mode")
@@ -32,6 +40,8 @@ type Runtime interface {
 	Name() string
 	GetOverview() (Overview, error)
 	GetMetrics() (Metrics, error)
+	GetNetwork() (Network, error)
+	GetLogs(q LogQuery) ([]string, error)
 
 	GetServices() ([]Service, error)
 	StartService(name string) error
