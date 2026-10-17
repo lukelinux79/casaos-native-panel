@@ -1,125 +1,477 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CasaOS Native Panel</title>
     <style>
-... (omitted for brevity, same CSS as before) ...
+      :root {
+        --bg: #0b1020; --panel: #111827; --border: #374151; --text: #e5e7eb;
+        --muted: #9ca3af; --accent: #3b82f6; --danger: #ef4444; --ok: #22c55e;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+      .layout { display: flex; min-height: 100vh; }
+      .sidebar { width: 210px; background: var(--panel); border-right: 1px solid var(--border); padding: 20px 14px; flex-shrink: 0; }
+      .brand { font-weight: 700; font-size: 18px; margin-bottom: 22px; }
+      .nav a { display: block; padding: 9px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; margin-bottom: 4px; }
+      .nav a.active, .nav a:hover { background: #1f2937; color: var(--text); }
+      .content { flex: 1; padding: 24px 28px; min-width: 0; }
+      .header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+      h1 { margin: 0; font-size: 24px; }
+      h2 { margin: 0 0 12px; font-size: 16px; }
+      .badge { background: #1f2937; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; }
+      .grid .card { margin-bottom: 0; }
+      .label { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+      .value { font-size: 22px; font-weight: 600; }
+      .sub, .muted { color: var(--muted); font-size: 13px; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #1f2937; vertical-align: top; }
+      th { color: var(--muted); font-weight: 500; }
+      .actions { white-space: nowrap; text-align: right; }
+      button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px; }
+      button.secondary { background: #374151; }
+      button.danger { background: var(--danger); }
+      button.small { padding: 4px 8px; font-size: 12px; }
+      button:disabled { opacity: .5; cursor: default; }
+      input, select, textarea { background: #0f172a; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 14px; }
+      textarea { width: 100%; min-height: 380px; font-family: ui-monospace, monospace; font-size: 13px; }
+      form.inline { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+      form.inline label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+      form.inline label.check { flex-direction: row; align-items: center; gap: 6px; }
+      .chip { display: inline-flex; align-items: center; gap: 4px; background: #1f2937; border-radius: 999px; padding: 2px 8px; margin: 2px; font-size: 12px; }
+      .chip button { background: none; padding: 0 2px; color: var(--muted); }
+      .yes { color: var(--ok); } .no { color: var(--muted); }
+      .view { display: none; } .view.active { display: block; }
+      #toast { position: fixed; right: 20px; bottom: 20px; max-width: 460px; padding: 12px 16px; border-radius: 10px; background: #1f2937; border: 1px solid var(--border); display: none; white-space: pre-wrap; font-size: 13px; }
+      #toast.error { border-color: var(--danger); }
+      dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 12px; min-width: 320px; }
+      dialog form { display: flex; flex-direction: column; gap: 10px; }
+      dialog::backdrop { background: rgba(0,0,0,.6); }
+      @media (max-width: 760px) { .layout { flex-direction: column; } .sidebar { width: auto; } .nav { display: flex; flex-wrap: wrap; gap: 4px; } }
     </style>
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
         <div class="brand">CasaOS Native</div>
-        <nav class="nav">
-          <a href="#" class="active">Dashboard</a>
-          <a href="#services">Services</a>
-          <a href="#samba">Samba</a>
+        <nav class="nav" id="nav">
+          <a href="#dashboard">Dashboard</a>
           <a href="#users">Users</a>
+          <a href="#groups">Groups</a>
+          <a href="#shares">SMB shares</a>
+          <a href="#samba">Samba config</a>
+          <a href="#services">Services</a>
           <a href="#packages">Packages</a>
         </nav>
       </aside>
 
       <main class="content">
-        <div class="header">
-          <h1>Dashboard</h1>
-          <span class="badge" id="modeBadge">system mode</span>
-        </div>
-
-        <section class="grid">
-          <div class="card">
-            <div class="label">Host</div>
-            <div class="value" id="hostname">-</div>
-            <div class="sub" id="osInfo">-</div>
-          </div>
-          <div class="card">
-            <div class="label">CPU Load</div>
-            <div class="value" id="loadValue">-</div>
-            <div class="sub">1m / 5m / 15m</div>
-          </div>
-          <div class="card">
-            <div class="label">RAM</div>
-            <div class="value" id="ramValue">-</div>
-            <div class="sub" id="ramSub">-</div>
-          </div>
-          <div class="card">
-            <div class="label">Disk</div>
-            <div class="value" id="diskValue">-</div>
-            <div class="sub" id="diskSub">-</div>
+        <section class="view" id="view-dashboard">
+          <div class="header"><h1>Dashboard</h1><span class="badge" id="modeBadge">-</span></div>
+          <div class="grid">
+            <div class="card"><div class="label">Host</div><div class="value" id="hostname">-</div><div class="sub" id="osInfo">-</div></div>
+            <div class="card"><div class="label">CPU load</div><div class="value" id="loadValue">-</div><div class="sub">1m / 5m / 15m</div></div>
+            <div class="card"><div class="label">RAM</div><div class="value" id="ramValue">-</div><div class="sub" id="ramSub">-</div></div>
+            <div class="card"><div class="label">Disk /</div><div class="value" id="diskValue">-</div><div class="sub" id="diskSub">-</div></div>
+            <div class="card"><div class="label">Uptime</div><div class="value" id="uptimeValue">-</div><div class="sub" id="netSub">-</div></div>
           </div>
         </section>
 
-        <section class="two-col">
+        <section class="view" id="view-users">
+          <div class="header"><h1>Users</h1></div>
           <div class="card">
-            <div class="label">Services</div>
-            <ul class="status-list" id="serviceList"></ul>
+            <h2>Create user</h2>
+            <form class="inline" id="createUserForm">
+              <label>Username <input name="username" required pattern="[a-z_][a-z0-9_\-]{0,31}" /></label>
+              <label>Password <input name="password" type="password" required minlength="8" autocomplete="new-password" /></label>
+              <label>Groups (comma separated) <input name="groups" placeholder="users" /></label>
+              <label>Shell
+                <select name="shell">
+                  <option value="">system default</option>
+                  <option value="/bin/bash">/bin/bash</option>
+                  <option value="/usr/sbin/nologin">/usr/sbin/nologin (Samba only)</option>
+                </select>
+              </label>
+              <label class="check"><input type="checkbox" name="samba" checked /> Samba login</label>
+              <button type="submit">Create</button>
+            </form>
           </div>
-
           <div class="card">
-            <div class="label">Packages</div>
-            <ul class="package-list" id="packageList"></ul>
+            <label class="muted"><input type="checkbox" id="showSystemUsers" /> show system accounts</label>
+            <table>
+              <thead><tr><th>User</th><th>UID</th><th>Groups</th><th>Samba</th><th>Shell</th><th></th></tr></thead>
+              <tbody id="userTable"></tbody>
+            </table>
+            <div class="muted" id="sambaHint"></div>
           </div>
         </section>
 
-        <div style="height: 22px"></div>
-
-        <section class="card" id="samba">
-          <div class="label">Samba config</div>
-          <textarea id="sambaConfig"></textarea>
-          <div class="button-row">
-            <button id="saveSambaBtn">Save config</button>
-            <button class="secondary" id="refreshSambaBtn">Refresh</button>
+        <section class="view" id="view-groups">
+          <div class="header"><h1>Groups</h1></div>
+          <div class="card">
+            <form class="inline" id="createGroupForm">
+              <label>Group name <input name="name" required pattern="[a-z_][a-z0-9_\-]{0,31}" /></label>
+              <button type="submit">Create group</button>
+            </form>
           </div>
-          <div id="sambaStatus" class="muted" style="margin-top: 12px; min-height: 20px;"></div>
+          <div class="card">
+            <label class="muted"><input type="checkbox" id="showSystemGroups" /> show system groups</label>
+            <table>
+              <thead><tr><th>Group</th><th>GID</th><th>Members</th><th></th></tr></thead>
+              <tbody id="groupTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-shares">
+          <div class="header"><h1>SMB shares</h1></div>
+          <div class="card">
+            <h2 id="shareFormTitle">New share</h2>
+            <form class="inline" id="shareForm">
+              <label>Name <input name="name" required /></label>
+              <label>Path <input name="path" required placeholder="/srv/share" /></label>
+              <label>Comment <input name="comment" /></label>
+              <label>Allowed users (empty = all) <input name="valid_users" placeholder="alice @family" /></label>
+              <label>Write list <input name="write_list" placeholder="alice" /></label>
+              <label class="check"><input type="checkbox" name="read_only" /> read only</label>
+              <label class="check"><input type="checkbox" name="browseable" checked /> visible</label>
+              <label class="check"><input type="checkbox" name="guest_ok" /> guest access</label>
+              <button type="submit">Save share</button>
+              <button type="button" class="secondary" id="shareFormReset">Clear</button>
+            </form>
+            <div class="muted" style="margin-top:10px">Changes are checked with <code>testparm</code>, a backup of smb.conf is kept and smbd is reloaded.</div>
+          </div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Share</th><th>Path</th><th>Access</th><th>Users</th><th></th></tr></thead>
+              <tbody id="shareTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-samba">
+          <div class="header"><h1>Samba config</h1></div>
+          <div class="card">
+            <textarea id="sambaConfig" spellcheck="false"></textarea>
+            <div style="margin-top:12px; display:flex; gap:10px">
+              <button id="saveSambaBtn">Validate &amp; save</button>
+              <button class="secondary" id="refreshSambaBtn">Reload</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-services">
+          <div class="header"><h1>Services</h1></div>
+          <div class="card">
+            <input id="serviceFilter" placeholder="filter" style="margin-bottom:10px" />
+            <table>
+              <thead><tr><th>Service</th><th>Unit state</th><th></th></tr></thead>
+              <tbody id="serviceTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="view-packages">
+          <div class="header"><h1>Packages</h1></div>
+          <div class="card">
+            <input id="packageFilter" placeholder="filter" style="margin-bottom:10px" />
+            <table>
+              <thead><tr><th>Package</th><th>Version</th><th>Status</th></tr></thead>
+              <tbody id="packageTable"></tbody>
+            </table>
+          </div>
         </section>
       </main>
     </div>
 
+    <dialog id="pwDialog">
+      <form method="dialog" id="pwForm">
+        <strong id="pwTitle">Set password</strong>
+        <input type="password" name="pw1" placeholder="new password" minlength="8" required autocomplete="new-password" />
+        <input type="password" name="pw2" placeholder="repeat password" minlength="8" required autocomplete="new-password" />
+        <div style="display:flex; gap:8px; justify-content:end">
+          <button type="button" class="secondary" id="pwCancel">Cancel</button>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast"></div>
+
     <script>
-... (omitted for brevity) ...
-      function renderDashboard(data) {
-        const overview = data?.overview || {};
-        const metrics = data?.metrics || {};
-        const services = data?.services || [];
+      const state = { users: [], groups: [], sambaUsers: [], sambaAvailable: true, shares: [], services: [], packages: [] };
+      const $ = (id) => document.getElementById(id);
 
-        document.getElementById('hostname').textContent = overview.hostname || 'unknown';
-        document.getElementById('osInfo').textContent = overview.os || 'unknown';
-        document.getElementById('modeBadge').textContent = (overview.mode || 'system') + ' mode';
-
-        document.getElementById('loadValue').textContent = `${Number(metrics.load1 || 0).toFixed(2)} / ${Number(metrics.load5 || 0).toFixed(2)} / ${Number(metrics.load15 || 0).toFixed(2)}`;
-
-        const memTotal = Number(metrics.mem_total_kb || 0);
-        const memAvail = Number(metrics.mem_available_kb || 0);
-        const memUsed = memTotal - memAvail;
-        const memPct = memTotal > 0 ? Math.round((memUsed / memTotal) * 100) : 0;
-        document.getElementById('ramValue').textContent = `${(memUsed/1024).toFixed(1)} MB`;
-        document.getElementById('ramSub').textContent = `${memPct}% used of ${(memTotal/1024).toFixed(0)} MB`;
-
-        const diskPct = Number(metrics.disk_used_percent || 0).toFixed(1);
-        document.getElementById('diskValue').textContent = `${diskPct}%`;
-        document.getElementById('diskSub').textContent = `Free ${(Number(metrics.disk_free_bytes||0)/(1024*1024*1024)).toFixed(2)} GB of ${(Number(metrics.disk_total_bytes||0)/(1024*1024*1024)).toFixed(2)} GB`;
-
-        document.getElementById('serviceList').innerHTML = services.map(service => `
-          <li>
-            <span><span class="status-dot"></span>${service.name}</span>
-            <span class="muted">${service.state || 'unknown'}</span>
-          </li>
-        `).join('') || '<li class="muted">No services</li>';
+      function esc(v) {
+        return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       }
 
-      async function loadDashboard() {
+      async function fetchJSON(url, options = {}) {
+        const opts = { ...options, headers: { ...(options.headers || {}) } };
+        if (opts.body !== undefined) {
+          opts.headers['Content-Type'] = 'application/json';
+          opts.body = JSON.stringify(opts.body);
+        }
+        const res = await fetch(url, opts);
+        const text = await res.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text }; }
+        if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+        return data;
+      }
+
+      let toastTimer;
+      function toast(msg, isError = false) {
+        const t = $('toast');
+        t.textContent = msg;
+        t.className = isError ? 'error' : '';
+        t.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => (t.style.display = 'none'), isError ? 9000 : 3500);
+      }
+
+      async function act(fn, okMsg, reload) {
         try {
-          const data = await fetchJSON('/api/v1/dashboard');
-          const dashboard = data.data || {};
-          state.dashboard = dashboard;
-          renderDashboard(dashboard);
+          const res = await fn();
+          if (res && res.warning) toast(res.warning, true);
+          else if (okMsg) toast(okMsg);
+          if (reload) await reload();
         } catch (err) {
-          console.error(err);
+          toast(err.message, true);
         }
       }
 
-... (omitted for brevity) ...
+      function askPassword(title) {
+        return new Promise((resolve) => {
+          const dlg = $('pwDialog'), form = $('pwForm');
+          $('pwTitle').textContent = title;
+          form.reset();
+          const done = (value) => { dlg.close(); form.onsubmit = null; resolve(value); };
+          $('pwCancel').onclick = () => done(null);
+          form.onsubmit = (e) => {
+            e.preventDefault();
+            if (form.pw1.value !== form.pw2.value) { toast('Passwords do not match', true); return; }
+            done(form.pw1.value);
+          };
+          dlg.showModal();
+        });
+      }
+
+      const fmtBytes = (b) => {
+        const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; b = Number(b || 0);
+        while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+        return `${b.toFixed(i ? 1 : 0)} ${u[i]}`;
+      };
+      const fmtUptime = (s) => { s = Number(s || 0); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d}d ${h}h` : `${h}h ${m}m`; };
+      const splitList = (v) => String(v || '').split(/[\s,]+/).filter(Boolean);
+
+      /* ---------- dashboard ---------- */
+      async function loadDashboard() {
+        const { data } = await fetchJSON('/api/v1/dashboard');
+        const o = data.overview || {}, m = data.metrics || {};
+        $('hostname').textContent = o.hostname || 'unknown';
+        $('osInfo').textContent = [o.os, o.kernel].filter(Boolean).join(' · ');
+        $('modeBadge').textContent = (o.mode || 'system') + ' mode';
+        $('loadValue').textContent = [m.load1, m.load5, m.load15].map((v) => Number(v || 0).toFixed(2)).join(' / ');
+        const total = Number(m.mem_total_kb || 0) * 1024, used = total - Number(m.mem_available_kb || 0) * 1024;
+        $('ramValue').textContent = fmtBytes(used);
+        $('ramSub').textContent = total ? `${Math.round(used / total * 100)}% of ${fmtBytes(total)}` : '-';
+        $('diskValue').textContent = `${Number(m.disk_used_percent || 0).toFixed(1)}%`;
+        $('diskSub').textContent = `${fmtBytes(m.disk_free_bytes)} free of ${fmtBytes(m.disk_total_bytes)}`;
+        $('uptimeValue').textContent = fmtUptime(m.uptime_seconds);
+        $('netSub').textContent = `net rx ${fmtBytes(m.net_rx_bytes)} · tx ${fmtBytes(m.net_tx_bytes)}`;
+      }
+
+      /* ---------- users ---------- */
+      async function loadUsers() {
+        const [u, g, s] = await Promise.all([
+          fetchJSON('/api/v1/users'), fetchJSON('/api/v1/groups'), fetchJSON('/api/v1/samba/users'),
+        ]);
+        state.users = u.users || []; state.groups = g.groups || [];
+        state.sambaUsers = s.users || []; state.sambaAvailable = s.available !== false;
+        renderUsers(); renderGroups();
+      }
+
+      function renderUsers() {
+        const showSystem = $('showSystemUsers').checked;
+        const rows = state.users.filter((u) => showSystem || !u.system).map((u) => {
+          const smb = state.sambaUsers.includes(u.username);
+          const n = esc(u.username);
+          const btns = u.system ? '<span class="muted">system</span>' : `
+            <button class="small secondary" data-act="pw" data-user="${n}">Password</button>
+            ${state.sambaAvailable ? `<button class="small secondary" data-act="smbpw" data-user="${n}">${smb ? 'Samba password' : 'Enable Samba'}</button>` : ''}
+            ${smb ? `<button class="small secondary" data-act="smbdel" data-user="${n}">Disable Samba</button>` : ''}
+            <button class="small danger" data-act="del" data-user="${n}">Delete</button>`;
+          return `<tr><td>${n}</td><td>${u.uid}</td><td>${(u.groups || []).map(esc).join(', ')}</td>
+            <td class="${smb ? 'yes' : 'no'}">${smb ? 'yes' : 'no'}</td><td class="muted">${esc(u.shell)}</td>
+            <td class="actions">${btns}</td></tr>`;
+        });
+        $('userTable').innerHTML = rows.join('') || '<tr><td colspan="6" class="muted">No users</td></tr>';
+        $('sambaHint').textContent = state.sambaAvailable ? '' : 'Samba is not installed (apt install samba) – Samba features are disabled.';
+      }
+
+      $('userTable').addEventListener('click', async (e) => {
+        const b = e.target.closest('button[data-act]'); if (!b) return;
+        const user = b.dataset.user, enc = encodeURIComponent(user);
+        if (b.dataset.act === 'pw') {
+          const pw = await askPassword(`Linux password for ${user}`); if (pw === null) return;
+          act(() => fetchJSON(`/api/v1/users/${enc}/password`, { method: 'PUT', body: { password: pw } }), 'Password updated');
+        } else if (b.dataset.act === 'smbpw') {
+          const pw = await askPassword(`Samba password for ${user}`); if (pw === null) return;
+          act(() => fetchJSON(`/api/v1/samba/users/${enc}`, { method: 'PUT', body: { password: pw } }), 'Samba login saved', loadUsers);
+        } else if (b.dataset.act === 'smbdel') {
+          if (!confirm(`Remove Samba login of ${user}?`)) return;
+          act(() => fetchJSON(`/api/v1/samba/users/${enc}`, { method: 'DELETE' }), 'Samba login removed', loadUsers);
+        } else if (b.dataset.act === 'del') {
+          if (!confirm(`Delete user ${user}?`)) return;
+          const home = confirm(`Also delete the home directory of ${user}? (Cancel keeps it)`);
+          act(() => fetchJSON(`/api/v1/users/${enc}?remove_home=${home}`, { method: 'DELETE' }), 'User deleted', loadUsers);
+        }
+      });
+
+      $('createUserForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const body = { username: f.username.value.trim(), password: f.password.value, shell: f.shell.value, groups: splitList(f.groups.value), samba: f.samba.checked && state.sambaAvailable };
+        act(async () => { await fetchJSON('/api/v1/users', { method: 'POST', body }); f.reset(); }, `User ${body.username} created`, loadUsers);
+      });
+      $('showSystemUsers').addEventListener('change', renderUsers);
+
+      /* ---------- groups ---------- */
+      function renderGroups() {
+        const showSystem = $('showSystemGroups').checked;
+        const regularUsers = state.users.filter((u) => !u.system).map((u) => u.username);
+        $('groupTable').innerHTML = state.groups.filter((g) => showSystem || !g.system).map((g) => {
+          const n = esc(g.name);
+          const members = (g.members || []).map((m) => `<span class="chip">${esc(m)}${regularUsers.includes(m) ? `<button title="remove" data-act="rm" data-group="${n}" data-user="${esc(m)}">×</button>` : ''}</span>`).join('');
+          const candidates = regularUsers.filter((u) => !(g.members || []).includes(u));
+          const add = candidates.length ? `<select data-group="${n}"><option value="">add member…</option>${candidates.map((u) => `<option>${esc(u)}</option>`).join('')}</select>` : '';
+          const del = g.system ? '' : `<button class="small danger" data-act="del" data-group="${n}">Delete</button>`;
+          return `<tr><td>${n}</td><td>${g.gid}</td><td>${members || '<span class="muted">-</span>'}</td><td class="actions">${add} ${del}</td></tr>`;
+        }).join('') || '<tr><td colspan="4" class="muted">No groups</td></tr>';
+      }
+
+      $('groupTable').addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-act]'); if (!b) return;
+        const g = encodeURIComponent(b.dataset.group);
+        if (b.dataset.act === 'rm') {
+          act(() => fetchJSON(`/api/v1/groups/${g}/members/${encodeURIComponent(b.dataset.user)}`, { method: 'DELETE' }), 'Member removed', loadUsers);
+        } else if (b.dataset.act === 'del' && confirm(`Delete group ${b.dataset.group}?`)) {
+          act(() => fetchJSON(`/api/v1/groups/${g}`, { method: 'DELETE' }), 'Group deleted', loadUsers);
+        }
+      });
+      $('groupTable').addEventListener('change', (e) => {
+        const sel = e.target.closest('select[data-group]'); if (!sel || !sel.value) return;
+        act(() => fetchJSON(`/api/v1/groups/${encodeURIComponent(sel.dataset.group)}/members`, { method: 'POST', body: { user: sel.value } }), 'Member added', loadUsers);
+      });
+      $('createGroupForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = e.target.name.value.trim();
+        act(async () => { await fetchJSON('/api/v1/groups', { method: 'POST', body: { name } }); e.target.reset(); }, `Group ${name} created`, loadUsers);
+      });
+      $('showSystemGroups').addEventListener('change', renderGroups);
+
+      /* ---------- shares ---------- */
+      async function loadShares() {
+        try {
+          const data = await fetchJSON('/api/v1/samba/shares');
+          state.shares = data.shares || [];
+        } catch (err) {
+          state.shares = [];
+          $('shareTable').innerHTML = `<tr><td colspan="5" class="muted">${esc(err.message)}</td></tr>`;
+          return;
+        }
+        $('shareTable').innerHTML = state.shares.map((s) => {
+          const n = esc(s.name);
+          const access = [s.read_only ? 'read only' : 'read/write', s.guest_ok ? 'guest' : '', s.browseable ? '' : 'hidden'].filter(Boolean).join(', ');
+          const users = (s.valid_users || []).length ? s.valid_users.map(esc).join(' ') : '<span class="muted">all</span>';
+          const btns = s.special ? '<span class="muted">built-in (edit in config)</span>' :
+            `<button class="small secondary" data-act="edit" data-share="${n}">Edit</button> <button class="small danger" data-act="del" data-share="${n}">Delete</button>`;
+          return `<tr><td>${n}<div class="muted">${esc(s.comment)}</div></td><td>${esc(s.path)}</td><td>${access}</td><td>${users}</td><td class="actions">${btns}</td></tr>`;
+        }).join('') || '<tr><td colspan="5" class="muted">No shares</td></tr>';
+      }
+
+      function fillShareForm(s) {
+        const f = $('shareForm');
+        f.name.value = s?.name || ''; f.name.readOnly = !!s;
+        f.path.value = s?.path || ''; f.comment.value = s?.comment || '';
+        f.valid_users.value = (s?.valid_users || []).join(' '); f.write_list.value = (s?.write_list || []).join(' ');
+        f.read_only.checked = !!s?.read_only; f.browseable.checked = s ? !!s.browseable : true; f.guest_ok.checked = !!s?.guest_ok;
+        $('shareFormTitle').textContent = s ? `Edit share ${s.name}` : 'New share';
+      }
+
+      $('shareTable').addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-act]'); if (!b) return;
+        const share = state.shares.find((s) => s.name === b.dataset.share);
+        if (b.dataset.act === 'edit') { fillShareForm(share); window.scrollTo(0, 0); }
+        else if (b.dataset.act === 'del' && confirm(`Delete share ${share.name}? Files stay on disk.`)) {
+          act(() => fetchJSON(`/api/v1/samba/shares/${encodeURIComponent(share.name)}`, { method: 'DELETE' }), 'Share deleted', loadShares);
+        }
+      });
+      $('shareForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const body = { path: f.path.value.trim(), comment: f.comment.value.trim(), read_only: f.read_only.checked, browseable: f.browseable.checked,
+          guest_ok: f.guest_ok.checked, valid_users: splitList(f.valid_users.value), write_list: splitList(f.write_list.value) };
+        const name = f.name.value.trim();
+        act(async () => { const r = await fetchJSON(`/api/v1/samba/shares/${encodeURIComponent(name)}`, { method: 'PUT', body }); fillShareForm(null); return r; }, `Share ${name} saved`, loadShares);
+      });
+      $('shareFormReset').addEventListener('click', () => fillShareForm(null));
+
+      /* ---------- raw samba config ---------- */
+      async function loadSambaConfig() {
+        try { $('sambaConfig').value = (await fetchJSON('/api/v1/samba/config')).content || ''; }
+        catch (err) { $('sambaConfig').value = ''; toast(err.message, true); }
+      }
+      $('saveSambaBtn').addEventListener('click', () => act(() => fetchJSON('/api/v1/samba/config', { method: 'PUT', body: { content: $('sambaConfig').value } }), 'smb.conf validated and saved'));
+      $('refreshSambaBtn').addEventListener('click', loadSambaConfig);
+
+      /* ---------- services & packages ---------- */
+      async function loadServices() {
+        state.services = (await fetchJSON('/api/v1/services')).services || [];
+        renderServices();
+      }
+      function renderServices() {
+        const q = $('serviceFilter').value.toLowerCase();
+        $('serviceTable').innerHTML = state.services.filter((s) => s.name.toLowerCase().includes(q)).map((s) => {
+          const n = esc(s.name);
+          return `<tr><td>${n}</td><td class="${s.enabled ? 'yes' : 'no'}">${esc(s.state)}</td><td class="actions">
+            ${['start', 'stop', 'restart'].map((a) => `<button class="small secondary" data-act="${a}" data-svc="${n}">${a}</button>`).join(' ')}</td></tr>`;
+        }).join('') || '<tr><td colspan="3" class="muted">No services</td></tr>';
+      }
+      $('serviceFilter').addEventListener('input', renderServices);
+      $('serviceTable').addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-act]'); if (!b) return;
+        if (b.dataset.act !== 'start' && !confirm(`${b.dataset.act} ${b.dataset.svc}?`)) return;
+        act(() => fetchJSON(`/api/v1/services/${encodeURIComponent(b.dataset.svc)}/${b.dataset.act}`, { method: 'POST', body: {} }), `${b.dataset.svc}: ${b.dataset.act} ok`);
+      });
+
+      async function loadPackages() {
+        state.packages = (await fetchJSON('/api/v1/packages')).packages || [];
+        renderPackages();
+      }
+      function renderPackages() {
+        const q = $('packageFilter').value.toLowerCase();
+        const list = state.packages.filter((p) => p.name.toLowerCase().includes(q));
+        $('packageTable').innerHTML = list.slice(0, 300).map((p) => `<tr><td>${esc(p.name)}</td><td class="muted">${esc(p.version)}</td><td>${esc(p.state)}</td></tr>`).join('')
+          + (list.length > 300 ? `<tr><td colspan="3" class="muted">${list.length - 300} more – refine the filter</td></tr>` : '');
+      }
+      $('packageFilter').addEventListener('input', renderPackages);
+
+      /* ---------- routing ---------- */
+      const loaders = { dashboard: loadDashboard, users: loadUsers, groups: loadUsers, shares: loadShares, samba: loadSambaConfig, services: loadServices, packages: loadPackages };
+      function route() {
+        const view = location.hash.slice(1) in loaders ? location.hash.slice(1) : 'dashboard';
+        document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${view}`));
+        document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === `#${view}`));
+        loaders[view]().catch((err) => toast(err.message, true));
+      }
+      window.addEventListener('hashchange', route);
+      route();
+      setInterval(() => { if ($('view-dashboard').classList.contains('active')) loadDashboard().catch(() => {}); }, 10000);
     </script>
   </body>
 </html>

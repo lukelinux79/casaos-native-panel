@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/lukelinux79/casaos-native-panel/internal/api"
+	"github.com/lukelinux79/casaos-native-panel/internal/auth"
 	"github.com/lukelinux79/casaos-native-panel/internal/config"
 	"github.com/lukelinux79/casaos-native-panel/internal/runtime"
 )
@@ -22,7 +23,15 @@ func main() {
 		log.Fatalf("failed to initialize runtime: %v", err)
 	}
 
-	srv := api.NewServer(rt)
+	authCfg, err := auth.LoadFromEnv()
+	if err != nil {
+		log.Fatalf("invalid admin login config: %v", err)
+	}
+	if !authCfg.Enabled {
+		log.Printf("WARNING: authentication is disabled (CASAOS_AUTH_DISABLED=true); anyone who can reach the panel has root-level control")
+	}
+
+	srv := api.NewServer(rt, authCfg, cfg.WebDir)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
 	log.Printf("Starting CasaOS Native Panel on %s in %s mode", addr, cfg.Mode)

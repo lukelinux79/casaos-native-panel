@@ -22,4 +22,5 @@ Set the admin account by environment variables for the systemd service (example)
 Environment=CASAOS_ADMIN_USER=admin
 Environment=CASAOS_ADMIN_PASSWORD=secret
 
+Both variables are required; the panel refuses to start without them (password min. 8 characters).
 Restart the service after updating the unit file.

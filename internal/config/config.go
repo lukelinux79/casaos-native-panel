@@ -11,6 +11,8 @@ type Config struct {
 	Mode string
 	Host string
 	Port int
+	// WebDir is the directory with the static UI files.
+	WebDir string
 }
 
 func Load() (Config, error) {
@@ -18,6 +20,8 @@ func Load() (Config, error) {
 		Mode: getenvDefault("CASAOS_MODE", "system"),
 		Host: getenvDefault("CASAOS_HOST", "0.0.0.0"),
 		Port: getenvIntDefault("CASAOS_PORT", 8080),
+
+		WebDir: getenvDefault("CASAOS_WEB_DIR", "web"),
 	}
 
 	if cfg.Mode != "system" && cfg.Mode != "docker" {

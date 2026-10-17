@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+// ReloadError means smb.conf was written successfully but smbd could not be
+// reloaded, so the change is not active yet.
+type ReloadError struct{ Err error }
+
+func (e *ReloadError) Error() string {
+	return "smb.conf saved, but smbd could not be reloaded: " + e.Err.Error()
+}
+
+func (e *ReloadError) Unwrap() error { return e.Err }
+
 // SaveSambaConfig safely writes a new smb.conf with validation and backup.
 func SaveSambaConfig(content string) error {
 	confDir := "/etc/samba"
@@ -48,7 +58,7 @@ func SaveSambaConfig(content string) error {
 	if err := reloadCmd.Run(); err != nil {
 		restartCmd := exec.Command("systemctl", "restart", "smbd")
 		if restartErr := restartCmd.Run(); restartErr != nil {
-			return fmt.Errorf("failed to reload or restart smbd: reload error: %v, restart error: %v", err, restartErr)
+			return &ReloadError{Err: fmt.Errorf("reload error: %v, restart error: %v", err, restartErr)}
 		}
 	}
 

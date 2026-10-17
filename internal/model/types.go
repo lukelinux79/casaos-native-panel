@@ -24,14 +24,42 @@ type Package struct {
 
 type User struct {
 	Username string   `json:"username"`
+	UID      int      `json:"uid"`
+	GID      int      `json:"gid"`
 	HomeDir  string   `json:"home_dir,omitempty"`
 	Shell    string   `json:"shell,omitempty"`
 	Groups   []string `json:"groups,omitempty"`
+	System   bool     `json:"system"`
+}
+
+// NewUser is the payload for creating a user account.
+type NewUser struct {
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	Shell    string   `json:"shell,omitempty"`
+	Groups   []string `json:"groups,omitempty"`
+	Samba    bool     `json:"samba"`
 }
 
 type Group struct {
 	Name    string   `json:"name"`
+	GID     int      `json:"gid"`
 	Members []string `json:"members,omitempty"`
+	System  bool     `json:"system"`
+}
+
+// Share is a single SMB share section of smb.conf.
+type Share struct {
+	Name       string   `json:"name"`
+	Path       string   `json:"path"`
+	Comment    string   `json:"comment,omitempty"`
+	ReadOnly   bool     `json:"read_only"`
+	Browseable bool     `json:"browseable"`
+	GuestOK    bool     `json:"guest_ok"`
+	ValidUsers []string `json:"valid_users,omitempty"`
+	WriteList  []string `json:"write_list,omitempty"`
+	// Special marks built-in sections like [homes] or [printers].
+	Special bool `json:"special,omitempty"`
 }
 
 type Metrics struct {
